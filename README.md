@@ -75,7 +75,8 @@ LXRFlux is plug-and-play and can be used in both **Blueprints** and **C++** with
    - Click **Add Component** → Search for `LXRFluxComponent`.
    - Select it to attach the real-time lighting detector to your actor.
 
-   🎥 *[Insert Screenshot: Add Component → LXRFluxComponent]*
+   🎥 ![AddComponent](https://github.com/user-attachments/assets/4644ce44-26a2-4878-a474-dd85c3f81856)
+
 
 2. **Access the Data**
    Use these exposed variables in your Blueprint logic:
@@ -83,7 +84,8 @@ LXRFlux is plug-and-play and can be used in both **Blueprints** and **C++** with
    - `Luminance` *(float)* – Brightness of the brightest area in view.
    - `Color` *(FLinearColor)* – Average color from visible indirect/direct light.
 
-   🎥 *[Insert Screenshot: "Get Luminance" and "Get Color" nodes]*
+   🎥 ![GetData](https://github.com/user-attachments/assets/c6814476-1374-4a0d-987c-0bc08846b0f5)
+
 
 ---
 
