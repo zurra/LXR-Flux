@@ -1,0 +1,47 @@
+﻿#include "/Engine/Private/Common.ush"
+
+RWBuffer<uint> OutData : register(u0); // 0=R, 1=G, 2=B, 3=Count 4=Encoded Luminance
+
+Texture2D<float4> InScene_Top : register(t0); // HDR input Top
+Texture2D<float4> InScene_Bot : register(t1); // HDR input Bot
+
+SamplerState LinearSampler : register(s0);
+
+
+#define INDEX_R 0
+#define INDEX_G 1
+#define INDEX_B 2
+#define INDEX_COUNT 3
+#define INDEX_MAX_LUM 4
+
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+void MainReadData(uint3 DTid : SV_DispatchThreadID)
+{
+	uint2 TexSize;
+	InScene_Top.GetDimensions(TexSize.x, TexSize.y);
+
+	if (DTid.x >= TexSize.x || DTid.y >= TexSize.y)
+		return;
+
+	float3 ColorTop = InScene_Top.Load(int3(DTid.xy, 0)).rgb;
+	float3 ColorBot = InScene_Bot.Load(int3(DTid.xy, 0)).rgb;
+
+	float3 CombinedColor = (ColorTop+ColorBot)*0.5;
+
+	float CombinedLuminance = dot(CombinedColor,float3(0.2126, 0.7152, 0.0722));
+
+	uint EncodedR = uint(CombinedColor.r * LUMINANCE_SCALE);
+	uint EncodedG = uint(CombinedColor.g * LUMINANCE_SCALE);
+	uint EncodedB = uint(CombinedColor.b * LUMINANCE_SCALE);
+	uint EncodedLuminance = uint(CombinedLuminance * LUMINANCE_SCALE);
+
+	InterlockedAdd(OutData[INDEX_R], EncodedR);
+	InterlockedAdd(OutData[INDEX_G], EncodedG);
+	InterlockedAdd(OutData[INDEX_B], EncodedB);
+	InterlockedMax(OutData[INDEX_MAX_LUM],EncodedLuminance);
+	
+	if (CombinedLuminance > LUMINANCE_THRESHOLD)
+	{
+		InterlockedAdd(OutData[INDEX_COUNT], 1);
+	}
+}

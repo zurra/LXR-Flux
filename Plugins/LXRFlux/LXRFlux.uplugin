@@ -1,0 +1,26 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0.0-55",
+	"FriendlyName": "LXRFlux",
+	"Description": "LXRFlux: GPU Light Detection System",
+	"Category": "Light Detection",
+	"CreatedBy": "Clusterfact Games",
+	"CreatedByURL": "",
+	"DocsURL": "https://github.com/zurra/LXR-Flux/",
+	"SupportURL": "https://discord.gg/aWvgSa9mKd",
+	"EngineVersion": "5.5.0",
+	"CanContainContent": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "LXRFlux",
+			"Type": "Runtime",
+			"LoadingPhase": "PostConfigInit",
+			"WhitelistPlatforms": [
+				"Win64"
+			]
+		}
+
+	]
+}
