@@ -44,11 +44,21 @@ LXRFlux is a lightweight, insanely fast subsystem built entirely on **render thr
 
 ## 📦 Installation
 
-1. Clone this repo into your project's `Plugins/` directory:
+1. Clone this repo where ever you want.:
    ```bash
    git clone https://github.com/zurra/LXR-Flux.git
    ```
 
+### 🔧 Building the Project
+
+This repository does **not** include precompiled binaries by default, so you’ll need to build them locally. Make sure you have all the necessary Unreal Engine C++ prerequisites installed (Visual Studio, UE5 source access, etc).
+
+Once cloned, simply open the `FPTemplate.uproject` file to begin the build process. Unreal will automatically generate project files and start compiling the code.
+
+> 💡 Prebuilt binaries are available for your convenience and can be downloaded from the [releases page](https://github.com/zurra/LXR-Flux/releases/tag/release).  
+> These binaries include both the plugin and the sample project, and they are built for **Unreal Engine 5.5.4**.
+
+> ⚠️ If you're using a different engine version, it's strongly recommended to build from source to ensure compatibility.
 
 ---
 
