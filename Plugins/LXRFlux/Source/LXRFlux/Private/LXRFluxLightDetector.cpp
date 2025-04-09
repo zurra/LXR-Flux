@@ -187,7 +187,9 @@ void ULXRFluxLightDetector::FetchLumenCVars(IConsoleVariable* Var)
 	{
 		if (!IndirectDebugWidget.IsValid())
 		{
-			TSubclassOf<UUserWidget> WidgetClass = LoadClass<UUserWidget>(NULL, TEXT("/LXRFlux/Widget/WB_LxrCanvas.WB_LxrCanvas_C"));
+			const FSoftClassPath SoftCanvasPath(TEXT("/LXRFlux/Widget/WB_LxrCanvas.WB_LxrCanvas_C"));
+
+			TSubclassOf<UUserWidget> WidgetClass = SoftCanvasPath.TryLoadClass<UUserWidget>();
 
 			if (WidgetClass)
 			{
@@ -350,19 +352,19 @@ void ULXRFluxLightDetector::TickComponent(float DeltaTime, ELevelTick TickType, 
 	}
 
 
-	if (bFLXRFluxDebugCaptureWidgetEnabled)
-	{
-		for (auto& CaptureComponent2D : SceneCaptures)
-		{
-			DrawDebugCamera(GetWorld(), CaptureComponent2D->GetComponentLocation(), CaptureComponent2D->GetComponentRotation(), CaptureComponent2D->FOVAngle, 4, FColor::Green, 0,
-			                DeltaTime);
-
-			ChildActorComponent->GetChildActor()->SetActorLocation(GetOwner()->GetActorLocation());
-			ChildActorComponent->SetWorldLocation(GetOwner()->GetActorLocation());
-
-			DrawDebugDirectionalArrow(GetWorld(), GetOwner()->GetActorLocation(), ChildActorComponent.Get()->GetChildActor()->GetActorLocation(), 250.f, FColor::Red);
-		}
-	}
+	// if (bFLXRFluxDebugCaptureWidgetEnabled)
+	// {
+	// 	for (auto& CaptureComponent2D : SceneCaptures)
+	// 	{
+	// 		DrawDebugCamera(GetWorld(), CaptureComponent2D->GetComponentLocation(), CaptureComponent2D->GetComponentRotation(), CaptureComponent2D->FOVAngle, 4, FColor::Green, 0,
+	// 		                DeltaTime);
+	//
+	// 		ChildActorComponent->GetChildActor()->SetActorLocation(GetOwner()->GetActorLocation());
+	// 		ChildActorComponent->SetWorldLocation(GetOwner()->GetActorLocation());
+	//
+	// 		DrawDebugDirectionalArrow(GetWorld(), GetOwner()->GetActorLocation(), ChildActorComponent.Get()->GetChildActor()->GetActorLocation(), 250.f, FColor::Red);
+	// 	}
+	// }
 
 	// Luminance = FMath::FInterpConstantTo(Luminance, LuminanceTarget, DeltaTime, 2);
 	// ColorOutput = FMath::CInterpTo(ColorOutput, ColorOutputTarget, DeltaTime, 2);
@@ -595,7 +597,7 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 	IndirectMeshComponent->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
 	IndirectMeshComponent->SetVisibleInSceneCaptureOnly(!bFLXRFluxDebugMeshEnabled);
 
-	if (bOnlyIndirect)
+	if (!bCaptureDirect)
 	{
 		IndirectMeshComponent->LightingChannels.bChannel0 = false;
 		IndirectMeshComponent->LightingChannels.bChannel1 = false;
@@ -609,13 +611,12 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 
 	FPostProcessSettings PostProcessSettings;
 	PostProcessSettings.bOverride_DynamicGlobalIlluminationMethod = true;
-	PostProcessSettings.DynamicGlobalIlluminationMethod = EDynamicGlobalIlluminationMethod::Lumen;
+	PostProcessSettings.DynamicGlobalIlluminationMethod = bCaptureIndirect ? EDynamicGlobalIlluminationMethod::Lumen : EDynamicGlobalIlluminationMethod::None;
 
 	// PostProcessSettings.AddBlendable(GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>()->IndirectPostProcessMaterial, 1);
 
-
-	PostProcessSettings.ReflectionMethod = EReflectionMethod::Lumen;
 	PostProcessSettings.bOverride_ReflectionMethod = true;
+	PostProcessSettings.ReflectionMethod = bCaptureIndirect ? EReflectionMethod::Lumen : EReflectionMethod::None;
 
 	// PostProcessSettings.bOverride_LumenSceneLightingQuality = true;
 	// PostProcessSettings.bOverride_LumenSceneDetail = true;
@@ -638,13 +639,17 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 		SceneCapture->bCaptureEveryFrame = false;
 		SceneCapture->bCaptureOnMovement = false;
 		SceneCapture->bConsiderUnrenderedOpaquePixelAsFullyTranslucent = true;
-		SceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_LegacySceneCapture;
+		SceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
 		SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorHDR;
-		SceneCapture->ShowOnlyActorComponents(GetOwner());
-		SceneCapture->ShowOnlyComponent(IndirectMeshComponent);
+		if (bCaptureIndirect && !bCaptureDirect)
+		{
+			SceneCapture->ShowOnlyActorComponents(GetOwner());
+			SceneCapture->ShowOnlyComponent(IndirectMeshComponent);
+		}
 		SceneCapture->FOVAngle = 35;
 		SceneCapture->TextureTarget->SizeX = RenderTextureSize;
 		SceneCapture->TextureTarget->SizeY = RenderTextureSize;
+
 
 		SceneCapture->TextureTarget->RenderTargetFormat = RTF_RGBA32f;
 		SceneCapture->TextureTarget->ClearColor = FColor::Black;

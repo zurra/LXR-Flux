@@ -29,7 +29,11 @@ public:
 	void RequestOneShotCaptureUpdate();
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="LXRFlux|Detection|Indirect")
-	int bOnlyIndirect = false;
+	bool bCaptureIndirect = true;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="LXRFlux|Detection|Direct")
+	bool bCaptureDirect = true;
+
 
 	UFUNCTION(BlueprintPure, Category="LXRFlux|Detection|Indirect")
 	UTextureRenderTarget2D* GetBotTarget() const { return BotRT; }
