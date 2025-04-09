@@ -203,9 +203,9 @@ After building **LXR**, which includes advanced detection subsystems like:
 
 If you’re working on AI stealth mechanics, visibility perception, or light-reactive gameplay and need something **tightly integrated** and **responsive frame-to-frame**, consider using:
 
-> 🎯 **[LXR]([https://clusterfact.games](https://docs.clusterfact.games/docs/LXR))** — the full detection framework for Unreal Engine, including direct, indirect, silhouette and memory-based lighting detection, built to integrate into real games.
+- 🎯 **[LXR]([https://clusterfact.games](https://docs.clusterfact.games/docs/LXR))** — the full detection framework for Unreal Engine, including direct, indirect, silhouette and memory-based lighting detection, built to integrate into real games.
 
-> ✅ LXRFlux is used under the hood as its indirect lighting backend.
+- ✅ LXRFlux is used under the hood as its indirect lighting backend.
 
 ---
 
@@ -233,6 +233,7 @@ If you’re working on AI stealth mechanics, visibility perception, or light-rea
 ## 🧠 About the Author
 
 Developed by [Lord Zurra](https://www.linkedin.com/in/hannes-v%C3%A4is%C3%A4nen-2194403) – the creator of [**LXR**](https://docs.clusterfact.games/docs/LXR), the most advanced light detection plugin for Unreal Engine.
+
 ---
 
 
