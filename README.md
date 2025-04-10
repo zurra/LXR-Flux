@@ -105,8 +105,8 @@ LXRFlux is plug-and-play and can be used in both **Blueprints** and **C++** with
 The Debug widget contains following data: 
 1. Final Smoothed Color
 2. Final Smoothed Luminosity
-3. Top Capture
-4. Bottom Capture
+3. Bottom Capture
+4. Top Capture
 
 
 ---
