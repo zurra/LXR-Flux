@@ -104,7 +104,7 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 		auto* PassParams = GraphBuilder.AllocParameters<FLXRFluxIndirectAnalyze::FParameters>();
 		PassParams->InScene_Top = SceneHDR_Top;
 		PassParams->InScene_Bot = SceneHDR_Bot;
-		// PassParams->InSampler = TStaticSamplerState<SF_Point>::GetRHI();
+
 		PassParams->OutData = GraphBuilder.CreateUAV(FRDGBufferUAVDesc(OutDataBuffer, PF_R32_UINT));
 
 		DispatchParams->DataReadbackBuffer = MakeUnique<FRHIGPUBufferReadback>(TEXT("DataReadBack"));
@@ -178,18 +178,16 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 		DispatchParams->DataReadbackBuffer->Unlock();
 		DispatchParams->DataReadbackBuffer.Reset();
 		DispatchParams->bAnalyzePending = false;
-		DispatchParams->bAnalyzeDone = false; // if you want to flag it as consumed
+		DispatchParams->bAnalyzeDone = false; 
 		DispatchParams->PollingAttempts = 0;
 
 		DispatchParams->CaptureHistory.Enqueue(Luminance);
 
-		// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Raw Sum: %u, Count: %u"), EncodedSum, EncodedCount);
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Raw Count: %u"), Count);
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Max Luminance: %.4f"), Luminance);
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] RGB: R=%.4f G=%.4f B=%.4f"), FinalR, FinalG, FinalB);
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Final Luminance Received: %f"), Luminance);
 
-		//  Execute the callback!
 		if (DispatchParams->OnReadbackComplete)
 		{
 			DispatchParams->OnReadbackComplete(Luminance, FLinearColor(FinalR, FinalG, FinalB, 1));
@@ -218,7 +216,7 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 						UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux] Polling skipped — DispatchParams no longer valid."));
 					}
 				});
-				return false; // only once
+				return false; 
 			}),
 			0.05f);
 	}
