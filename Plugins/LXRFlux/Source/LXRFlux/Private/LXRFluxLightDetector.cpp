@@ -22,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+//Disclaimer//
+/* This class is quite mess still, its copy from the LXR Indirect Detector and still needs to be cleaned up. */
+//Disclaimer//
 
 #include "LXRFluxLightDetector.h"
 
