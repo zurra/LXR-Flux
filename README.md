@@ -103,8 +103,8 @@ LXRFlux is plug-and-play and can be used in both **Blueprints** and **C++** with
 ![Debugs](https://github.com/user-attachments/assets/2fb4b609-772f-4292-a97a-0c29766cc810)
 
 The Debug widget contains following data: 
-1. Final Color
-2. Final Luminosity
+1. Final Smoothed Color
+2. Final Smoothed Luminosity
 3. Top Capture
 4. Bottom Capture
 
@@ -144,7 +144,7 @@ Unreal does not update Lumen bounce lighting for SceneCaptures every frame, whic
 
 > 💡 This is an Unreal limitation, *not* a performance issue with LXRFlux.
 
-If you want real-time indirect lighting responsiveness in gameplay, consider experimenting with *Direct Lighting Only Mode* or using [**LXR**](https://docs.clusterfact.games/docs/LXR).
+If you want real-time lighting responsiveness in gameplay, consider experimenting with *Direct Lighting Only Mode* or using [**LXR**](https://docs.clusterfact.games/docs/LXR).
 
 --- 
 
