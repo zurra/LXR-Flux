@@ -63,7 +63,8 @@ LXRFlux is a lightweight, high-performance lighting analysis system built entire
 - Two `SceneCaptureComponent2D` instances positioned around a proxy mesh.
 - Each capture renders to a **32×32 PF_FloatRGB RenderTarget** (GPU shared).
 - These render targets provide full HDR scene information via **FinalColorHDR**.
-- One capture per frame, alternating each tick, ensures steady framerate and minimal overhead.
+- Both top and bottom captures are triggered in the same frame, followed by GPU-side analysis.
+   -  The next capture round is only queued after the previous GPU processing and readback complete, ensuring low overhead and stable pacing.
 
 ### ⚙️ Compute Shader
 
