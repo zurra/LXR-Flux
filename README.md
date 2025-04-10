@@ -47,6 +47,71 @@ LXRFlux is a lightweight, insanely fast light detection system built entirely on
 
 ---
 
+
+## 🧠 Technical Breakdown
+
+LXRFlux is a lightweight, high-performance lighting analysis system built entirely on Unreal Engine’s **Render Thread** and **Compute Shaders**. It captures average color, maximum luminance, and pixel count from your scene using the RDG (Render Dependency Graph) system, with zero game thread overhead.
+
+### 🔁 Frame Loop Integration
+
+- Uses Unreal’s `OnResolvedSceneColor` callback to hook directly into the **RDG render graph**, right after scene color is resolved.
+- Runs entirely on the **Render Thread**, ensuring no interference with the Game Thread.
+- LXRFlux supports asynchronous dispatch using **`FTSTicker`** to safely handle readback polling.
+
+### 🎯 Scene Capture & Target
+
+- Two `SceneCaptureComponent2D` instances positioned around a proxy mesh.
+- Each capture renders to a **32×32 PF_FloatRGB RenderTarget** (GPU shared).
+- These render targets provide full HDR scene information via **FinalColorHDR**.
+- One capture per frame, alternating each tick, ensures steady framerate and minimal overhead.
+
+### ⚙️ Compute Shader
+
+- A custom HLSL shader processes the two scene captures (top & bottom) in parallel.
+- The shader:
+  - Loads both textures
+  - Averages the RGB values
+  - Computes **luminance** using standard coefficients:  
+    `dot(float3(0.2126, 0.7152, 0.0722))`
+  - Encodes values to `uint` with a defined `LUMINANCE_SCALE` (e.g., 10,000)
+  - Uses **`InterlockedAdd`** to accumulate R, G, B, and filtered pixel count
+  - Uses **`InterlockedMax`** to track the **maximum luminance**
+
+### 📦 RDG Buffer Readback
+
+- Outputs are stored in a **1x5 structured buffer**:
+  ```
+  [0] Encoded R
+  [1] Encoded G
+  [2] Encoded B
+  [3] Filtered Pixel Count
+  [4] Encoded Max Luminance
+  ```
+- Readback is handled via **`FRHIGPUBufferReadback`** and staging buffer logic
+- Uses **`GraphBuilder.AddEnqueueCopyPass`** to schedule GPU readback
+- Polling is done on Render Thread until the buffer is marked ready, after which the data is decoded
+
+### 🧪 Output Interpretation
+
+- Values are divided by `LUMINANCE_SCALE` to convert back to float
+- Color and luminance data are then smoothed using `TCircularHistoryBuffer`
+- Blueprint-accessible properties:
+  ```cpp
+  UPROPERTY(BlueprintReadOnly, Category="LXRFlux|Detection")
+  float Luminance;
+
+  UPROPERTY(BlueprintReadOnly, Category="LXRFlux|Detection")
+  FLinearColor Color;
+  ```
+
+### 🧩 Modularity
+
+- Everything is encapsulated in a `ULXRFluxComponent`
+- Can be dropped into any actor from the Blueprint Editor
+
+---
+
+
 ## 📦 Installation
 
 1. Clone this repo where ever you want.:
