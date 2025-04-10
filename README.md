@@ -216,7 +216,7 @@ If you’re working on AI stealth mechanics, visibility perception, or light-rea
 |-------------------------------|----------------------------------|-------------|
 | **Detection Type**            | Precise world space *line-traced* light exposure | GPU-averaged HDR scene luminance |
 | **Accuracy**                  | Ultra-precise, based on *actual visibility* | Fast approximation via scene capture |
-| **Performance**               | Heavier (raycasts, async traces) | Lightweight (pure GPU compute) |
+| **Performance**               | Asynchronous, multithreaded CPU analysis via task graph | Lightweight (pure GPU compute) |
 | **Data Granularity**          | Per-AI, Per-Frame, Shadow Silhouettes | Scene-wide average or max values |
 | **Use Case**                  | Stealth AI, exposure-based detection, silhouette vision | Ambient lighting checks, visual triggers, global feedback |
 | **Post-Processing Aware**     | Yes (before and after PP)        | Yes (via CaptureSource settings) |
@@ -248,3 +248,28 @@ MIT – Free to use, modify, and include in commercial and personal projects. At
 Pull requests are welcome. If you have suggestions, bug reports, or cool use cases, open an issue or reach out on [Discord](https://discord.gg/aWvgSa9mKd).
 
 ---
+
+Here's a clean and focused TODO list based on that content:
+
+---
+
+### 🛠️ LXRFlux – Advanced TODO
+
+1. **Investigate Custom Pixel Shader Path (Optional)**
+   - Explore replacing `SceneCaptureComponent2D` with a custom render pass or manual scene view capture.
+   - Gain finer control over rendering and materials.
+   - *Note:* This is highly advanced and likely overkill unless developing an engine fork.
+
+2. **Explore GPU-Only Detection (Experimental)**
+   - Consider a full GPU pipeline: compute shader → UAV → light tagging in screen space.
+   - This would avoid any CPU readback entirely.
+   - *Tradeoff:* Would lose game-thread-friendly access to luminance values.
+
+3. **Consider Async Compute Queue (Not currently needed)**
+   - Only relevant if compute shader becomes heavier or starts conflicting with graphics work.
+   - Current use is lightweight; no need to split into a dedicated async compute queue yet.
+
+4. **Improve Code Documentation**
+   - Add inline comments to key areas of RDG/compute dispatch.
+   - Document shader input/output formats and logic.
+   - Clarify RenderThread vs GameThread roles throughout.
