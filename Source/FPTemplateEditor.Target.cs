@@ -30,7 +30,11 @@ public class FPTemplateEditorTarget : TargetRules
 	public FPTemplateEditorTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Editor;
-		DefaultBuildSettings = BuildSettingsVersion.V5;
+#if UE_5_4_OR_LATER
+		DefaultBuildSettings = BuildSettingsVersion.Latest;
+#else
+		DefaultBuildSettings = BuildSettingsVersion.V4;
+#endif
 
 		ExtraModuleNames.AddRange( new string[] { "FPTemplate" } );
 	}

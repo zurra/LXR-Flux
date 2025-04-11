@@ -157,7 +157,13 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 		UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux] Readback polling exceeded max attempts, aborting."));
 		return;
 	}
-	if (DispatchParams->DataReadbackBuffer->IsReady())
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 5
+	const bool bReady = DispatchParams->Fence.IsValid() && DispatchParams->Fence->Poll();
+#else
+	const bool bReady = DispatchParams->DataReadbackBuffer && DispatchParams->DataReadbackBuffer->IsReady();
+#endif
+	
+	if (bReady)
 	{
 		// const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(5 * sizeof(uint32)));
 		const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(5 * sizeof(uint32)));

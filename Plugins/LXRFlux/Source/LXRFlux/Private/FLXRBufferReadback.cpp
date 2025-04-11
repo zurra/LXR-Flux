@@ -13,14 +13,15 @@ void FLXRBufferReadback::EnqueueCopy(FRDGBuilder& GraphBuilder, FRDGBufferRef Sr
 	Size = SizeInBytes;
 
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 5
-	FRHIBuffer* SrcRHI = GraphBuilder.ConvertToExternalBuffer(SrcBuffer);
+	FRHIBuffer* SrcRHI = SrcBuffer->GetRHI();
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("FLXRBufferReadback::CopyToStaging (%s)", DebugName),
 		ERDGPassFlags::NeverCull,
 		[this, SrcRHI](FRHICommandListImmediate& RHICmdList)
 		{
-			StagingBuffer = RHICmdList.CreateStagingBuffer();
-			RHICmdList.CopyBufferRegion(StagingBuffer, 0, SrcRHI, 0, Size);
+			StagingBuffer = RHICreateStagingBuffer();
+			RHICmdList.CopyToStagingBuffer(SrcRHI,StagingBuffer,0,Size );
+
 		});
 #else
 	if (!ReadbackBuffer.IsValid())
@@ -34,7 +35,7 @@ void FLXRBufferReadback::EnqueueCopy(FRDGBuilder& GraphBuilder, FRDGBufferRef Sr
 bool FLXRBufferReadback::IsReady() const
 {
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 5
-	return StagingBuffer.IsValid() && StagingBuffer->IsReady();
+	return true;
 #else
 	return ReadbackBuffer.IsValid() && ReadbackBuffer->IsReady();
 #endif
