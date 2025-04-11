@@ -315,9 +315,6 @@ Pull requests are welcome. If you have suggestions, bug reports, or cool use cas
 
 ---
 
-Here's a clean and focused TODO list based on that content:
-
----
 
 ### 🛠️ LXRFlux – Advanced TODO
 
