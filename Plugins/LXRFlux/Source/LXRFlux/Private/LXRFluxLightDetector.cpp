@@ -315,8 +315,8 @@ void ULXRFluxLightDetector::BeginPlay()
 	IndirectMeshComponent->SetVisibleInSceneCaptureOnly(!bFLXRFluxDebugMeshEnabled);
 
 
-	IndirectLuminanceHistory = TCircularHistoryBuffer<float>(10);
-	IndirectColorHistory = TCircularHistoryBuffer<FLinearColor>(10);
+	IndirectLuminanceHistory = TCircularHistoryBuffer<float>(HistoryCount);
+	IndirectColorHistory = TCircularHistoryBuffer<FLinearColor>(HistoryCount);
 	IndirectAnalyzeDispatchParams = MakeShared<FLXRFluxAnalyzeDispatchParams>();
 	IndirectAnalyzeDispatchParams->IndirectDetector = this;
 	IndirectAnalyzeDispatchParams->RenderTargetTop = IndirectAnalyzeDispatchParams->IndirectDetector->GetTopTarget()->GameThread_GetRenderTargetResource();
@@ -456,40 +456,80 @@ void ULXRFluxLightDetector::TickComponent(float DeltaTime, ELevelTick TickType, 
 }
 
 
-float ULXRFluxLightDetector::GetAverageLuminance() const
+float ULXRFluxLightDetector::GetFinalLuminanceValue() const
 {
-	float Sum = 0.0f;
-	int32 Count = IndirectLuminanceHistory.Num();
-
-	for (int32 Index = 0; Index < Count; ++Index)
-	{
-		Sum += IndirectLuminanceHistory[Index];
-	}
-	return (Count > 0) ? Sum / Count : 0.0f;
-}
-
-FLinearColor ULXRFluxLightDetector::GetAverageColor() const
-{
-	FLinearColor Sum = FLinearColor::Black;
 	int32 Count = IndirectColorHistory.Num();
 
-	for (int32 Index = 0; Index < Count; ++Index)
+	switch (SmoothMethod)
 	{
-		Sum += IndirectColorHistory[Index];
+	case TargetValueOverTime:
+		{
+			return FMath::FInterpConstantTo(Luminance, LastLuminance, DeltaReadSeconds, 50.f);
+		}
+
+	case HistoryBuffer:
+		{
+			float Sum = 0.0f;
+
+			for (int32 Index = 0; Index < Count; ++Index)
+			{
+				Sum += IndirectLuminanceHistory[Index];
+			}
+			return (Count > 0) ? Sum / Count : 0.0f;
+		}
+	case None:
+		return LastLuminance;
+		break;
+	default: ;
 	}
-	return (Count > 0) ? Sum / Count : FLinearColor::Black;
+	return {};
+}
+
+FLinearColor ULXRFluxLightDetector::GetFinalColorValue() const
+{
+	int32 Count = IndirectColorHistory.Num();
+
+	switch (SmoothMethod)
+	{
+	case TargetValueOverTime:
+		{
+			return FMath::CInterpTo(Color, LastColor, DeltaReadSeconds, 50.f);
+		}
+
+	case HistoryBuffer:
+		{
+			FLinearColor Sum = FLinearColor::Black;
+
+
+			for (int32 Index = 0; Index < Count; ++Index)
+			{
+				Sum += IndirectColorHistory[Index];
+			}
+			return (Count > 0) ? Sum / Count : FLinearColor::Black;
+		}
+	case None:
+		return LastColor;
+	default: ;
+	}
+	return {};
 }
 
 
 void ULXRFluxLightDetector::OnReadbackComplete(float InLuminance, FLinearColor InColor)
 {
-	IndirectLuminanceHistory.Add(InLuminance);
-	IndirectColorHistory.Add(InColor);
-	Luminance = GetAverageLuminance();
-	Color = GetAverageColor();
+	ReadCompleteTime = GetWorld()->GetTime().GetRealTimeSeconds();
+	DeltaReadSeconds = ReadCompleteTime - RequestCaptureTime;
+
+	LastLuminance = InLuminance;
+	LastColor = InColor;
+	IndirectLuminanceHistory.Add(LastLuminance);
+	IndirectColorHistory.Add(LastColor);
+
+	Luminance = GetFinalLuminanceValue();
+	Color = GetFinalColorValue();
 
 	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Final Luminance Received: %f"), InLuminance);
-	UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Final Average Luminance : %f"), Luminance);
+	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Final Average Luminance : %f"), Luminance);
 	RequestOneShotCaptureUpdate();
 }
 
@@ -512,6 +552,7 @@ void ULXRFluxLightDetector::RequestOneShotCaptureUpdate()
 	if (ULXRFluxSubSystem* SubSystem = GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>())
 	{
 		SubSystem->RequestIndirectAnalyze(IndirectAnalyzeDispatchParams);
+		RequestCaptureTime = GetWorld()->GetTime().GetRealTimeSeconds();
 	}
 }
 

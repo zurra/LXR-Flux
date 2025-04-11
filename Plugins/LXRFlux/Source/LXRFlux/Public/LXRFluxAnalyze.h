@@ -25,6 +25,7 @@ SOFTWARE.
 #pragma once
 
 #include "CoreMinimal.h"
+#include "FLXRBufferReadback.h"
 #include "GenericPlatform/GenericPlatformMisc.h"
 
 class ULXRFluxLightDetector;
@@ -34,11 +35,9 @@ struct FLXRFluxAnalyzeDispatchParams
 	FRenderTarget* RenderTargetTop = nullptr;
 	FRenderTarget* RenderTargetBot = nullptr;
 
-	TUniquePtr<FRHIGPUBufferReadback> DataReadbackBuffer;
+	TUniquePtr<FLXRBufferReadback> DataReadbackBuffer;
 
 	ULXRFluxLightDetector* IndirectDetector = nullptr;
-
-	TQueue<float> CaptureHistory;
 
 	int32 LuminanceSum;
 	int32 LuminanceCount;
@@ -117,3 +116,5 @@ public:
 	void BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDispatchParams> Params);
 
 };
+
+

@@ -33,6 +33,14 @@ SOFTWARE.
 #include "RenderCommandFence.h"
 #include "LXRFluxLightDetector.generated.h"
 
+UENUM()
+enum ESmoothMethod
+{
+	TargetValueOverTime,
+	HistoryBuffer,
+	None
+};
+
 
 struct FLXRFluxAnalyzeDispatchParams;
 
@@ -55,6 +63,15 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="LXRFlux|Detection|Direct")
 	bool bCaptureDirect = true;
+
+	UPROPERTY(EditAnywhere, Category="LXRFlux|Detection|Smoothing")
+	TEnumAsByte<ESmoothMethod> SmoothMethod = ESmoothMethod::TargetValueOverTime;
+
+	UPROPERTY(EditAnywhere, Category="LXRFlux|Detection|Smoothing", meta=(HideEditConditionToggle, EditCondition = "SmoothMethod == ESmoothMethod::TargetValueOverTime"))
+	float TargetValueSmoothSpeed = 50.f;
+
+	UPROPERTY(EditAnywhere, Category="LXRFlux|Detection|Smoothing", meta=(HideEditConditionToggle, EditCondition = "SmoothMethod == ESmoothMethod::HistoryBuffer"))
+	int HistoryCount = 10;
 
 
 	UFUNCTION(BlueprintPure, Category="LXRFlux|Detection|Indirect")
@@ -157,7 +174,14 @@ private:
 	bool bNeedsSceneCaptureUpdate;
 
 	void OnReadbackComplete(float Luminance, FLinearColor InColor);
-	float GetAverageLuminance() const;
-	FLinearColor GetAverageColor() const;
+	float GetFinalLuminanceValue() const;
+	FLinearColor GetFinalColorValue() const;
+
+	float DeltaReadSeconds;
+	float RequestCaptureTime;
+	float ReadCompleteTime;
+	
+	float LastLuminance;
+	FLinearColor LastColor;
 
 };

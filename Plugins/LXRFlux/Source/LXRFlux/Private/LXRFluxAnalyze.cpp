@@ -23,6 +23,8 @@ SOFTWARE.
 */
 
 #include "LXRFluxAnalyze.h"
+
+#include "FLXRBufferReadback.h"
 #include "PixelShaderUtils.h"
 #include "MeshPassProcessor.inl"
 #include "StaticMeshResources.h"
@@ -107,7 +109,10 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 
 		PassParams->OutData = GraphBuilder.CreateUAV(FRDGBufferUAVDesc(OutDataBuffer, PF_R32_UINT));
 
-		DispatchParams->DataReadbackBuffer = MakeUnique<FRHIGPUBufferReadback>(TEXT("DataReadBack"));
+
+		DispatchParams->DataReadbackBuffer = MakeUnique<FLXRBufferReadback>(TEXT("DataReadBack"));
+		// DispatchParams->DataReadbackBuffer->EnqueueCopy(GraphBuilder, OutDataBuffer, FLXRFluxIndirectBufferBytes);
+
 
 		AddClearUAVPass(GraphBuilder, PassParams->OutData, 0);
 
@@ -116,7 +121,7 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 		                             FIntVector(FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().X, 8), FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().Y, 8), 1));
 
 
-		AddEnqueueCopyPass(GraphBuilder, DispatchParams->DataReadbackBuffer.Get(), OutDataBuffer, FLXRFluxIndirectBufferBytes);
+		DispatchParams->DataReadbackBuffer->EnqueueCopy(GraphBuilder, OutDataBuffer, FLXRFluxIndirectBufferBytes);
 
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("IndirectAnalyze_Finalize"),
@@ -154,7 +159,9 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 	}
 	if (DispatchParams->DataReadbackBuffer->IsReady())
 	{
+		// const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(5 * sizeof(uint32)));
 		const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(5 * sizeof(uint32)));
+
 		constexpr float LuminanceScale = LUMINANCE_SCALE;
 
 		uint32 EncodedR = DataBuffer[0];
@@ -178,10 +185,8 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 		DispatchParams->DataReadbackBuffer->Unlock();
 		DispatchParams->DataReadbackBuffer.Reset();
 		DispatchParams->bAnalyzePending = false;
-		DispatchParams->bAnalyzeDone = false; 
+		DispatchParams->bAnalyzeDone = false;
 		DispatchParams->PollingAttempts = 0;
-
-		DispatchParams->CaptureHistory.Enqueue(Luminance);
 
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Raw Count: %u"), Count);
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Max Luminance: %.4f"), Luminance);
@@ -216,7 +221,7 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 						UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux] Polling skipped — DispatchParams no longer valid."));
 					}
 				});
-				return false; 
+				return false;
 			}),
 			0.05f);
 	}

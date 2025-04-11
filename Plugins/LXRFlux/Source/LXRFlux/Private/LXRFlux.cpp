@@ -43,4 +43,4 @@ void FLXRFluxModule::ShutdownModule()
 
 #undef LOCTEXT_NAMESPACE
 
-IMPLEMENT_MODULE(FLXRFluxModule, FLXRFluxCapture)
+IMPLEMENT_MODULE(FLXRFluxModule, LXRFlux)
