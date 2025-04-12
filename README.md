@@ -81,7 +81,7 @@ LXRFlux is a lightweight, high-performance lighting analysis system built entire
 
 ### 🧮 Compute Shader Outputs (RDG)
 
-The `LXRFluxIndirectAnalyze` compute shader processes two scene captures (Top & Bottom), combines them, and writes the following values into a single `RWBuffer<uint>`:
+The `LXRFlux Analyze` compute shader processes two scene captures (Top & Bottom), combines them, and writes the following values into a single `RWBuffer<uint>`:
 
 | Index | Value                         | Description                                              |
 |-------|-------------------------------|----------------------------------------------------------|
