@@ -459,3 +459,25 @@ Pull requests are welcome. If you have suggestions, bug reports, or cool use cas
    - Add inline comments to key areas of RDG/compute dispatch.
    - Document shader input/output formats and logic.
    - Clarify RenderThread vs GameThread roles throughout.
+  
+Absolutely — that’s a great addition to provide deeper insight and extra value to advanced users.
+
+Here’s a polished section you can add to the **end of your README.md**:
+
+---
+
+## 📚 Want to Learn More?
+
+If you're curious about how this system works under the hood — from RDG buffer setup to GPU fence polling and Render Thread async execution — I've documented some of the key technical patterns and Unreal-specific insights here:
+
+👉 [**Snippets & Notes**](https://docs.clusterfact.games/docs/Snippets/)
+
+Includes breakdowns of:
+- RDG & RHI usage in production systems
+- Render thread-only GPU workflows
+- Polling with `FTSTicker` and deferred GPU readbacks
+- Cross-version compatibility strategies for UE 5.3 – 5.5
+
+Whether you're new to GPU readbacks or just want a clean example of RDG integration, it’s all there.
+
+---
