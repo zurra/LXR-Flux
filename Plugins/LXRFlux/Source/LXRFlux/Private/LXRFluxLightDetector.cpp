@@ -319,6 +319,7 @@ void ULXRFluxLightDetector::BeginPlay()
 	IndirectColorHistory = TCircularHistoryBuffer<FLinearColor>(HistoryCount);
 	IndirectAnalyzeDispatchParams = MakeShared<FLXRFluxAnalyzeDispatchParams>();
 	IndirectAnalyzeDispatchParams->IndirectDetector = this;
+	IndirectAnalyzeDispatchParams->LuminanceThreshold = LuminanceThreshold;
 	IndirectAnalyzeDispatchParams->RenderTargetTop = IndirectAnalyzeDispatchParams->IndirectDetector->GetTopTarget()->GameThread_GetRenderTargetResource();
 	IndirectAnalyzeDispatchParams->IndirectDetector->GetTopTarget()->UpdateResourceImmediate();
 	IndirectAnalyzeDispatchParams->RenderTargetBot = IndirectAnalyzeDispatchParams->IndirectDetector->GetBotTarget()->GameThread_GetRenderTargetResource();
@@ -679,7 +680,7 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 	PostProcessSettings.bOverride_DynamicGlobalIlluminationMethod = true;
 	PostProcessSettings.DynamicGlobalIlluminationMethod = bCaptureIndirect ? EDynamicGlobalIlluminationMethod::Lumen : EDynamicGlobalIlluminationMethod::None;
 
-	// PostProcessSettings.AddBlendable(GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>()->IndirectPostProcessMaterial, 1);
+	PostProcessSettings.AddBlendable(GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>()->IndirectPostProcessMaterial, 1);
 
 	PostProcessSettings.bOverride_ReflectionMethod = true;
 	PostProcessSettings.ReflectionMethod = bCaptureIndirect ? EReflectionMethod::Lumen : EReflectionMethod::None;

@@ -30,7 +30,7 @@ SOFTWARE.
 
 ULXRFluxSubSystem::ULXRFluxSubSystem(const FObjectInitializer& ObjectInitializer)
 {
-	ConstructorHelpers::FObjectFinder<UMaterialInterface> IndirectPostProcessFinder(TEXT("/LXRFlux/Materials/PP_FLXRFlux_HDR_FULLRANGE.PP_FLXRFlux_HDR_FULLRANGE"));
+	ConstructorHelpers::FObjectFinder<UMaterialInterface> IndirectPostProcessFinder(TEXT("/LXRFlux/Materials/PP_LXR_HDR_FULLRANGE.PP_LXR_HDR_FULLRANGE"));
 	if (IndirectPostProcessFinder.Succeeded())
 	{
 		IndirectPostProcessMaterial = IndirectPostProcessFinder.Object;

@@ -5,8 +5,9 @@ RWBuffer<uint> OutData : register(u0); // 0=R, 1=G, 2=B, 3=Count 4=Encoded Lumin
 Texture2D<float4> InScene_Top : register(t0); // HDR input Top
 Texture2D<float4> InScene_Bot : register(t1); // HDR input Bot
 
-SamplerState LinearSampler : register(s0);
+float LuminanceThreshold;
 
+SamplerState LinearSampler : register(s0);
 
 #define INDEX_R 0
 #define INDEX_G 1
@@ -35,12 +36,12 @@ void MainReadData(uint3 DTid : SV_DispatchThreadID)
 	uint EncodedB = uint(CombinedColor.b * LUMINANCE_SCALE);
 	uint EncodedLuminance = uint(CombinedLuminance * LUMINANCE_SCALE);
 
-	InterlockedAdd(OutData[INDEX_R], EncodedR);
-	InterlockedAdd(OutData[INDEX_G], EncodedG);
-	InterlockedAdd(OutData[INDEX_B], EncodedB);
+	InterlockedMax(OutData[INDEX_R], EncodedR);
+	InterlockedMax(OutData[INDEX_G], EncodedG);
+	InterlockedMax(OutData[INDEX_B], EncodedB);
 	InterlockedMax(OutData[INDEX_MAX_LUM],EncodedLuminance);
 	
-	if (CombinedLuminance > LUMINANCE_THRESHOLD)
+	if (CombinedLuminance > LuminanceThreshold)
 	{
 		InterlockedAdd(OutData[INDEX_COUNT], 1);
 	}

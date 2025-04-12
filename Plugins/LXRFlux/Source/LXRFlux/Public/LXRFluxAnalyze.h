@@ -48,7 +48,8 @@ struct FLXRFluxAnalyzeDispatchParams
 	bool bIsInitialized = false;
 
 	int32 PollingAttempts;
-
+	
+	float LuminanceThreshold;
 
 	FGPUFenceRHIRef Fence;
 

@@ -55,6 +55,7 @@ class LXRFLUX_API FLXRFluxIndirectAnalyze : public FGlobalShader
 
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutData)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutCount)
+		SHADER_PARAMETER(float, LuminanceThreshold)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
@@ -67,7 +68,6 @@ class LXRFLUX_API FLXRFluxIndirectAnalyze : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("THREADS_Y"), NUM_THREADS_Y);
 		OutEnvironment.SetDefine(TEXT("THREADS_Z"), NUM_THREADS_Z);
 		OutEnvironment.SetDefine(TEXT("LUMINANCE_SCALE"), LUMINANCE_SCALE);
-		OutEnvironment.SetDefine(TEXT("LUMINANCE_THRESHOLD"), LUMINANCE_THRESHOLD);
 	}
 
 private:
@@ -108,6 +108,7 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 		PassParams->InScene_Bot = SceneHDR_Bot;
 
 		PassParams->OutData = GraphBuilder.CreateUAV(FRDGBufferUAVDesc(OutDataBuffer, PF_R32_UINT));
+		PassParams->LuminanceThreshold = DispatchParams->LuminanceThreshold;
 
 
 		DispatchParams->DataReadbackBuffer = MakeUnique<FLXRBufferReadback>(TEXT("DataReadBack"));
@@ -162,7 +163,7 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 #else
 	const bool bReady = DispatchParams->DataReadbackBuffer && DispatchParams->DataReadbackBuffer->IsReady();
 #endif
-	
+
 	if (bReady)
 	{
 		// const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(5 * sizeof(uint32)));
@@ -177,16 +178,16 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 		uint32 EncodedLuminance = DataBuffer[4];
 
 
-		float FinalR = 0;
-		float FinalG = 0;
-		float FinalB = 0;
+		float FinalR = EncodedR / LuminanceScale;
+		float FinalG = EncodedG / LuminanceScale;
+		float FinalB = EncodedB / LuminanceScale;
 		float Luminance = EncodedLuminance / LuminanceScale;
-		if (Count > 0)
-		{
-			FinalR = EncodedR / LuminanceScale / Count;
-			FinalG = EncodedG / LuminanceScale / Count;
-			FinalB = EncodedB / LuminanceScale / Count;
-		}
+		// if (Count > 0)
+		// {
+		// 	FinalR = EncodedR / LuminanceScale / Count;
+		// 	FinalG = EncodedG / LuminanceScale / Count;
+		// 	FinalB = EncodedB / LuminanceScale / Count;
+		// }
 
 		DispatchParams->DataReadbackBuffer->Unlock();
 		DispatchParams->DataReadbackBuffer.Reset();

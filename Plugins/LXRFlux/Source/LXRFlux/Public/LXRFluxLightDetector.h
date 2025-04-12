@@ -73,6 +73,8 @@ public:
 	UPROPERTY(EditAnywhere, Category="LXRFlux|Detection|Smoothing", meta=(HideEditConditionToggle, EditCondition = "SmoothMethod == ESmoothMethod::HistoryBuffer"))
 	int HistoryCount = 10;
 
+	UPROPERTY(EditAnywhere, Category="LXRFlux|Detection")
+	float LuminanceThreshold = 0.1f;
 
 	UFUNCTION(BlueprintPure, Category="LXRFlux|Detection|Indirect")
 	UTextureRenderTarget2D* GetBotTarget() const { return BotRT; }
@@ -180,8 +182,7 @@ private:
 	float DeltaReadSeconds;
 	float RequestCaptureTime;
 	float ReadCompleteTime;
-	
+
 	float LastLuminance;
 	FLinearColor LastColor;
-
 };
