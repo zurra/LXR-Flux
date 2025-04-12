@@ -78,24 +78,46 @@ LXRFlux is a lightweight, high-performance lighting analysis system built entire
   - Uses **`InterlockedAdd`** to accumulate R, G, B, and filtered pixel count
   - Uses **`InterlockedMax`** to track the **maximum luminance**
 
-### 📦 RDG Buffer Readback
 
-- Outputs are stored in a **1x5 structured buffer**:
-  ```
-  [0] Encoded R
-  [1] Encoded G
-  [2] Encoded B
-  [3] Filtered Pixel Count
-  [4] Encoded Max Luminance
-  ```
-- Readback is handled via **`FRHIGPUBufferReadback`** and staging buffer logic
-- Uses **`GraphBuilder.AddEnqueueCopyPass`** to schedule GPU readback
-- Polling is done on Render Thread until the buffer is marked ready, after which the data is decoded
+### 🧮 Compute Shader Outputs (RDG)
+
+The `LXRFluxIndirectAnalyze` compute shader processes two scene captures (Top & Bottom), combines them, and writes the following values into a single `RWBuffer<uint>`:
+
+| Index | Value                         | Description                                              |
+|-------|-------------------------------|----------------------------------------------------------|
+| `[0]` | Max Encoded R                 | Maximum Red value found (float × scale → uint)           |
+| `[1]` | Max Encoded G                 | Maximum Green value                                      |
+| `[2]` | Max Encoded B                 | Maximum Blue value                                       |
+| `[3]` | Valid Pixel Count             | Number of pixels above the `LUMINANCE_THRESHOLD`         |
+| `[4]` | Max Luminance Encoded         | Maximum luminance value across all pixels                |
+
+All encoded values use:
+
+```hlsl
+uint(LinearValue * LUMINANCE_SCALE)
+```
+
+The system uses `InterlockedMax` for all RGB and luminance values, allowing it to detect **brightest pixel color** in the scene, not just average.
+
+---
+
+### 🎛️ Smoothing Options (Updated)
+
+Both `Luminance` and `Color` smoothing are applied *after* max values are decoded. While the original system averaged color, the updated implementation tracks **max color (R, G, B)** and **max luminance**, ensuring that brief flashes or bright objects aren't lost in the smoothing.
+
+So now:
+
+- **Color** is smoothed using the *brightest RGB values* captured
+- **Luminance** is based on the *maximum brightness in the scene*
+
+This makes LXRFlux especially suited for gameplay-relevant lighting like:
+
+- Lightning flashes
+- Flashlight detection
+- Short bursts of extreme lighting
 
 ### 🧪 Output Interpretation
 
-- Values are divided by `LUMINANCE_SCALE` to convert back to float
-- Color and luminance data are then smoothed using `TCircularHistoryBuffer`
 - Blueprint-accessible properties:
   ```cpp
   UPROPERTY(BlueprintReadOnly, Category="LXRFlux|Detection")
@@ -143,7 +165,7 @@ Falls back to **manual staging buffer logic**:
 ### 💡 Why this matters
 
 GPU readback is notoriously tricky in Unreal due to the multithreaded rendering model and asynchronous nature of RDG.  
-`LXRFlux` handles this **efficiently and safely**, regardless of engine version..
+`LXRFlux` handles this **efficiently and safely**, regardless of engine version.
 
 ---
 
@@ -209,6 +231,58 @@ The Debug widget contains following data:
 3. Bottom Capture
 4. Top Capture
 
+---
+
+
+## 🎛️ Smoothing Options
+
+`LXRFlux` includes flexible **output smoothing** for both **luminance** and **average color**, making lighting data reliable and consistent across frames.
+
+You can choose the smoothing strategy via:
+
+```cpp
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LXRFlux|Detection|Smoothing")
+ELXRFluxSmoothingMethod SmoothMethod;
+```
+
+### Supported Modes
+
+| Method                | Description                                                                                  |
+|----------------------|----------------------------------------------------------------------------------------------|
+| `None`               | No smoothing — instantly returns the most recent captured value.                             |
+| `HistoryBuffer`      | Averages the latest N results using a `TCircularHistoryBuffer`. Best for stable values.      |
+| `TargetValueOverTime`| Smoothly interpolates toward the newest value using `FMath::CInterpTo`. Great for ambient fade. |
+
+---
+
+### Used for:
+
+- `Luminance` (float)
+- `Color` (FLinearColor)
+
+Both use the same smoothing logic, applied in your getter like this:
+
+```cpp
+switch (SmoothMethod)
+{
+    case TargetValueOverTime:
+        return FMath::InterpTo(Current, Previous, DeltaTime, SmoothingSpeed);
+
+    case HistoryBuffer:
+        FLinearColor Sum = FLinearColor::Black;
+        for (auto Sample : History)
+        {
+            Sum += Sample;
+        }
+        return Sum / History.Num();
+
+    case None:
+    default:
+        return Previous;
+}
+```
+
+Feel free to adjust smoothing speed or buffer size depending on your use case.
 
 ---
 
