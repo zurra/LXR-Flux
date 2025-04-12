@@ -113,6 +113,41 @@ LXRFlux is a lightweight, high-performance lighting analysis system built entire
 ---
 
 
+## ⚙️ Engine Version Compatibility
+
+`LXRFlux` supports **Unreal Engine 5.3+**, with optimized paths for newer versions:
+
+### ✅ UE 5.5 and above
+Uses [`FRHIGPUBufferReadback`](https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Runtime/RHI/Public/RHIGPUReadback.h) — a built-in, high-level GPU readback helper.
+
+- Clean RDG integration
+- No staging buffers or manual fence polling
+- Fully async (Render Thread + GPU only)
+- Example usage:
+  ```cpp
+  AddEnqueueCopyPass(GraphBuilder, Readback.Get(), Buffer, SizeInBytes);
+  ```
+
+### ♻️ UE 5.3 – 5.4
+Falls back to **manual staging buffer logic**:
+
+- Uses `FRHIStagingBuffer`, `RHICmdList.CopyToStagingBuffer()`
+- Polls on a timer using `FTSTicker` + Render Thread
+- Reads back with `RHILockStagingBuffer()` and `RHIUnlockStagingBuffer()`
+- Slightly more boilerplate, but identical final behavior
+
+➡️ This is handled transparently inside the custom wrapper class `FLXRBufferReadback`, which abstracts away version-specific readback details.
+
+---
+
+### 💡 Why this matters
+
+GPU readback is notoriously tricky in Unreal due to the multithreaded rendering model and asynchronous nature of RDG.  
+`LXRFlux` handles this **efficiently and safely**, regardless of engine version..
+
+---
+
+
 ## 📦 Installation
 
 1. Clone this repo where ever you want.:
