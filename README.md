@@ -142,19 +142,16 @@ This makes LXRFlux especially suited for gameplay-relevant lighting like:
 ### ✅ UE 5.5 and above
 Uses [`FRHIGPUBufferReadback`](https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Runtime/RHI/Public/RHIGPUReadback.h) — a built-in, high-level GPU readback helper.
 
-- Clean RDG integration
-- No staging buffers or manual fence polling
-- Fully async (Render Thread + GPU only)
-- Example usage:
-  ```cpp
-  AddEnqueueCopyPass(GraphBuilder, Readback.Get(), Buffer, SizeInBytes);
-  ```
+- ✅ **Clean RDG integration**  
+- ✅ **No manual staging buffers or fence polling** (on 5.5+)  
+- ✅ **Fully async** — runs entirely on Render Thread + GPU  
+- ✅ **Non-blocking readback polling** via `FTSTicker` on Render Thread  
 
 ### ♻️ UE 5.3 – 5.4
 Falls back to **manual staging buffer logic**:
 
-- Uses `FRHIStagingBuffer`, `RHICmdList.CopyToStagingBuffer()`
-- Polls on a timer using `FTSTicker` + Render Thread
+-  Uses `FRHIStagingBuffer`, `RHICmdList.CopyToStagingBuffer()`
+- **Non-blocking readback polling** via `FTSTicker` on Render Thread  
 - Reads back with `RHILockStagingBuffer()` and `RHIUnlockStagingBuffer()`
 - Slightly more boilerplate, but identical final behavior
 
