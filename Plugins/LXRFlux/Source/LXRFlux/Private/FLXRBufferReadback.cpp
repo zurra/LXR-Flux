@@ -13,7 +13,8 @@ void FLXRBufferReadback::EnqueueCopy(FRDGBuilder& GraphBuilder, FRDGBufferRef Sr
 	Size = SizeInBytes;
 
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 5
-	FRHIBuffer* SrcRHI = SrcBuffer->GetRHI();
+	TRefCountPtr<FRDGPooledBuffer> PooledBuffer = GraphBuilder.ConvertToExternalBuffer(SrcBuffer);
+	FRHIBuffer* SrcRHI = PooledBuffer->GetRHI();
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("FLXRBufferReadback::CopyToStaging (%s)", DebugName),
 		ERDGPassFlags::NeverCull,
