@@ -460,9 +460,6 @@ Pull requests are welcome. If you have suggestions, bug reports, or cool use cas
    - Document shader input/output formats and logic.
    - Clarify RenderThread vs GameThread roles throughout.
   
-Absolutely — that’s a great addition to provide deeper insight and extra value to advanced users.
-
-Here’s a polished section you can add to the **end of your README.md**:
 
 ---
 
