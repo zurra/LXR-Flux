@@ -25,7 +25,9 @@ SOFTWARE.
 #pragma once
 
 #include "CoreMinimal.h"
-#include "FLXRBufferReadback.h"
+#include "LXRBufferReadback.h"
+#include "UnrealClient.h"
+#include "Engine.h"
 #include "GenericPlatform/GenericPlatformMisc.h"
 
 class ULXRFluxLightDetector;

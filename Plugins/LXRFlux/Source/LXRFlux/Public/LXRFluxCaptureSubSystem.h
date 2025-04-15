@@ -27,6 +27,7 @@ SOFTWARE.
 #include "CoreMinimal.h"
 #include "LXRFluxAnalyze.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Materials/MaterialInterface.h"
 #include "LXRFluxCaptureSubSystem.generated.h"
 
 class ULXRFluxLightDetector;
