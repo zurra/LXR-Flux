@@ -20,7 +20,7 @@
 **LXRFlux** is a cutting-edge Unreal Engine plugin that captures, analyzes, and interprets **HDR lighting** on the GPU — in real-time — with near-zero overhead.
 
 
-https://github.com/user-attachments/assets/e40c2b66-76a0-49f8-9d3c-ec37cd4d03c0
+https://github.com/user-attachments/assets/203b4b62-02e8-42f8-a283-1213ba9bbe6d
 
 
 Developed by the creator of [**LXR**](https://docs.clusterfact.games/docs/LXR).
