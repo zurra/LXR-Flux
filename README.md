@@ -1,9 +1,26 @@
+```
+[UE 5.3 ✅] [UE 5.4 ✅] [UE 5.5 ✅]
+```
+
+> ⚠️ **Unreal Engine Compatibility**
+>
+> - ✅ `main` branch supports **Unreal Engine 5.5+**
+>   - Uses `FRHIGPUBufferReadback` (introduced in UE 5.5)
+> - ✅ `5.3-support` branch supports **Unreal Engine 5.3 – 5.4**
+>   - Uses custom fallback readback system
+>   - Compatible with 5.3 asset format (which also works in 5.4)
+>
+> 📝 If you're on **5.4**, use the `5.3-support` branch to avoid:
+> - Forward-incompatible assets from 5.5
+> - Missing `FRHIGPUBufferReadback` API
+
+
 # ⚡ LXRFlux – Real-Time GPU-Based Lighting Analysis for Unreal Engine
 
 **LXRFlux** is a cutting-edge Unreal Engine plugin that captures, analyzes, and interprets **HDR lighting** on the GPU — in real-time — with near-zero overhead.
 
 
-https://github.com/user-attachments/assets/e40c2b66-76a0-49f8-9d3c-ec37cd4d03c0
+https://github.com/user-attachments/assets/203b4b62-02e8-42f8-a283-1213ba9bbe6d
 
 
 Developed by the creator of [**LXR**](https://docs.clusterfact.games/docs/LXR).
@@ -78,24 +95,46 @@ LXRFlux is a lightweight, high-performance lighting analysis system built entire
   - Uses **`InterlockedAdd`** to accumulate R, G, B, and filtered pixel count
   - Uses **`InterlockedMax`** to track the **maximum luminance**
 
-### 📦 RDG Buffer Readback
 
-- Outputs are stored in a **1x5 structured buffer**:
-  ```
-  [0] Encoded R
-  [1] Encoded G
-  [2] Encoded B
-  [3] Filtered Pixel Count
-  [4] Encoded Max Luminance
-  ```
-- Readback is handled via **`FRHIGPUBufferReadback`** and staging buffer logic
-- Uses **`GraphBuilder.AddEnqueueCopyPass`** to schedule GPU readback
-- Polling is done on Render Thread until the buffer is marked ready, after which the data is decoded
+### 🧮 Compute Shader Outputs (RDG)
+
+The `LXRFlux Analyze` compute shader processes two scene captures (Top & Bottom), combines them, and writes the following values into a single `RWBuffer<uint>`:
+
+| Index | Value                         | Description                                              |
+|-------|-------------------------------|----------------------------------------------------------|
+| `[0]` | Max Encoded R                 | Maximum Red value found (float × scale → uint)           |
+| `[1]` | Max Encoded G                 | Maximum Green value                                      |
+| `[2]` | Max Encoded B                 | Maximum Blue value                                       |
+| `[3]` | Valid Pixel Count             | Number of pixels above the `LUMINANCE_THRESHOLD`         |
+| `[4]` | Max Luminance Encoded         | Maximum luminance value across all pixels                |
+
+All encoded values use:
+
+```hlsl
+uint(LinearValue * LUMINANCE_SCALE)
+```
+
+The system uses `InterlockedMax` for all RGB and luminance values, allowing it to detect **brightest pixel color** in the scene, not just average.
+
+---
+
+### 🎛️ Smoothing Options (Updated)
+
+Both `Luminance` and `Color` smoothing are applied *after* max values are decoded. While the original system averaged color, the updated implementation tracks **max color (R, G, B)** and **max luminance**, ensuring that brief flashes or bright objects aren't lost in the smoothing.
+
+So now:
+
+- **Color** is smoothed using the *brightest RGB values* captured
+- **Luminance** is based on the *maximum brightness in the scene*
+
+This makes LXRFlux especially suited for gameplay-relevant lighting like:
+
+- Lightning flashes
+- Flashlight detection
+- Short bursts of extreme lighting
 
 ### 🧪 Output Interpretation
 
-- Values are divided by `LUMINANCE_SCALE` to convert back to float
-- Color and luminance data are then smoothed using `TCircularHistoryBuffer`
 - Blueprint-accessible properties:
   ```cpp
   UPROPERTY(BlueprintReadOnly, Category="LXRFlux|Detection")
@@ -109,6 +148,38 @@ LXRFlux is a lightweight, high-performance lighting analysis system built entire
 
 - Everything is encapsulated in a `ULXRFluxComponent`
 - Can be dropped into any actor from the Blueprint Editor
+
+---
+
+
+## ⚙️ Engine Version Compatibility
+
+`LXRFlux` supports **Unreal Engine 5.3+**, with optimized paths for newer versions:
+
+### ✅ UE 5.5 and above
+Uses [`FRHIGPUBufferReadback`](https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Runtime/RHI/Public/RHIGPUReadback.h) — a built-in, high-level GPU readback helper.
+
+- ✅ **Clean RDG integration**  
+- ✅ **No manual staging buffers or fence polling** (on 5.5+)  
+- ✅ **Fully async** — runs entirely on Render Thread + GPU  
+- ✅ **Non-blocking readback polling** via `FTSTicker` on Render Thread  
+
+### ♻️ UE 5.3 – 5.4
+Falls back to **manual staging buffer logic**:
+
+-  Uses `FRHIStagingBuffer`, `RHICmdList.CopyToStagingBuffer()`
+- **Non-blocking readback polling** via `FTSTicker` on Render Thread  
+- Reads back with `RHILockStagingBuffer()` and `RHIUnlockStagingBuffer()`
+- Slightly more boilerplate, but identical final behavior
+
+➡️ This is handled transparently inside the custom wrapper class `FLXRBufferReadback`, which abstracts away version-specific readback details.
+
+---
+
+### 💡 Why this matters
+
+GPU readback is notoriously tricky in Unreal due to the multithreaded rendering model and asynchronous nature of RDG.  
+`LXRFlux` handles this **efficiently and safely**, regardless of engine version.
 
 ---
 
@@ -174,6 +245,58 @@ The Debug widget contains following data:
 3. Bottom Capture
 4. Top Capture
 
+---
+
+
+## 🎛️ Smoothing Options
+
+`LXRFlux` includes flexible **output smoothing** for both **luminance** and **average color**, making lighting data reliable and consistent across frames.
+
+You can choose the smoothing strategy via:
+
+```cpp
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LXRFlux|Detection|Smoothing")
+ELXRFluxSmoothingMethod SmoothMethod;
+```
+
+### Supported Modes
+
+| Method                | Description                                                                                  |
+|----------------------|----------------------------------------------------------------------------------------------|
+| `None`               | No smoothing — instantly returns the most recent captured value.                             |
+| `HistoryBuffer`      | Averages the latest N results using a `TCircularHistoryBuffer`. Best for stable values.      |
+| `TargetValueOverTime`| Smoothly interpolates toward the newest value using `FMath::CInterpTo`. Great for ambient fade. |
+
+---
+
+### Used for:
+
+- `Luminance` (float)
+- `Color` (FLinearColor)
+
+Both use the same smoothing logic, applied in your getter like this:
+
+```cpp
+switch (SmoothMethod)
+{
+    case TargetValueOverTime:
+        return FMath::InterpTo(Current, Previous, DeltaTime, SmoothingSpeed);
+
+    case HistoryBuffer:
+        FLinearColor Sum = FLinearColor::Black;
+        for (auto Sample : History)
+        {
+            Sum += Sample;
+        }
+        return Sum / History.Num();
+
+    case None:
+    default:
+        return Previous;
+}
+```
+
+Feel free to adjust smoothing speed or buffer size depending on your use case.
 
 ---
 
@@ -336,3 +459,22 @@ Pull requests are welcome. If you have suggestions, bug reports, or cool use cas
    - Add inline comments to key areas of RDG/compute dispatch.
    - Document shader input/output formats and logic.
    - Clarify RenderThread vs GameThread roles throughout.
+  
+
+---
+
+## 📚 Want to Learn More?
+
+If you're curious about how this system works under the hood — from RDG buffer setup to GPU fence polling and Render Thread async execution — I've documented some of the key technical patterns and Unreal-specific insights here:
+
+👉 [**Snippets & Notes**](https://docs.clusterfact.games/docs/Snippets/)
+
+Includes breakdowns of:
+- RDG & RHI usage in production systems
+- Render thread-only GPU workflows
+- Polling with `FTSTicker` and deferred GPU readbacks
+- Cross-version compatibility strategies for UE 5.3 – 5.5
+
+Whether you're new to GPU readbacks or just want a clean example of RDG integration, it’s all there.
+
+---

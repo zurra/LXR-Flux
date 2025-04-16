@@ -1,4 +1,4 @@
-﻿/*
+/*
 MIT License
 
 Copyright (c) 2025 Lord Zurra
@@ -22,26 +22,35 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include "LXRFlux.h"
-#include "Misc/Paths.h"
-#include "ShaderCore.h"
-#include "Interfaces/IPluginManager.h"
+#pragma once
 
-#define LOCTEXT_NAMESPACE "FLXRFluxModule"
-
-DEFINE_LOG_CATEGORY(LogLXRFlux);
+#include "CoreMinimal.h"
+#include "RenderGraphUtils.h"
+#include "Runtime/Launch/Resources/Version.h"
+#include "RHIGPUReadback.h"
 
 
-void FLXRFluxModule::StartupModule()
+class FRDGBuilder;
+
+
+class FLXRBufferReadback
 {
-	FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("LXRFlux"))->GetBaseDir(), TEXT("Shaders"));
-	AddShaderSourceDirectoryMapping(TEXT("/LXRFlux_Shaders"), PluginShaderDir);
-}
+public:
+	explicit FLXRBufferReadback(const TCHAR* InDebugName);
 
-void FLXRFluxModule::ShutdownModule()
-{
-}
+	void EnqueueCopy(FRDGBuilder& GraphBuilder, FRDGBufferRef SrcBuffer, uint32 SizeInBytes);
+	bool IsReady() const;
+	void* Lock(uint32 NumBytes);
+	void Unlock();
+	void Reset();
 
-#undef LOCTEXT_NAMESPACE
+private:
+	const TCHAR* DebugName;
+	uint32 Size = 0;
 
-IMPLEMENT_MODULE(FLXRFluxModule, LXRFlux)
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 5
+	TRefCountPtr<FRHIStagingBuffer> StagingBuffer;
+#else
+	TUniquePtr<FRHIGPUBufferReadback> ReadbackBuffer;
+#endif
+};

@@ -24,7 +24,7 @@ SOFTWARE.
 
 #include "LXRFluxAnalyze.h"
 
-#include "FLXRBufferReadback.h"
+#include "LXRBufferReadback.h"
 #include "PixelShaderUtils.h"
 #include "MeshPassProcessor.inl"
 #include "StaticMeshResources.h"

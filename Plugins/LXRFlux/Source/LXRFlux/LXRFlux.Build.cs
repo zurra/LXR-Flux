@@ -14,9 +14,8 @@ public class LXRFlux: ModuleRules
                 "RenderCore",
                 "Projects",
                 "Renderer",
-                "UnrealEd",
-                "UMG"
-
+                "UMG",
+                "HeadMountedDisplay"
             }
         );
 

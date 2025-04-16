@@ -26,6 +26,7 @@ SOFTWARE.
 #include "LXRFluxCaptureSubSystem.h"
 #include "LXRFluxAnalyze.h"
 #include "LXRFluxLightDetector.h"
+#include "Modules/ModuleManager.h"
 #include "Engine/TextureRenderTarget2D.h"
 
 ULXRFluxSubSystem::ULXRFluxSubSystem(const FObjectInitializer& ObjectInitializer)

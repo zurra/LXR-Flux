@@ -25,7 +25,9 @@ SOFTWARE.
 #pragma once
 
 #include "CoreMinimal.h"
-#include "FLXRBufferReadback.h"
+#include "LXRBufferReadback.h"
+#include "UnrealClient.h"
+#include "Engine.h"
 #include "GenericPlatform/GenericPlatformMisc.h"
 
 class ULXRFluxLightDetector;
@@ -68,9 +70,14 @@ public:
 	{
 		if (CachedViewportSize.X == -1)
 		{
-			FViewport* ViewPort = GEditor->GetActiveViewport();
-
-			CachedViewportSize = ViewPort ? ViewPort->GetSizeXY() : FIntPoint(1920, 1080);
+			if (GEngine && GEngine->GameViewport)
+			{
+				CachedViewportSize = GEngine->GameViewport->Viewport->GetSizeXY();
+			}
+			else
+			{
+				CachedViewportSize = FIntPoint(1920, 1080); // Fallback
+			}
 		}
 		return CachedViewportSize;
 	}
