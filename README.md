@@ -6,11 +6,11 @@
 >
 > - ✅ `main` branch supports **Unreal Engine 5.5+**
 >   - Uses `FRHIGPUBufferReadback` (introduced in UE 5.5)
-> - ✅ `5.3-support` branch supports **Unreal Engine 5.3 – 5.4**
+> - ✅ `feature/dev53` branch supports **Unreal Engine 5.3 – 5.4**
 >   - Uses custom fallback readback system
 >   - Compatible with 5.3 asset format (which also works in 5.4)
 >
-> 📝 If you're on **5.4**, use the `5.3-support` branch to avoid:
+> 📝 If you're on **5.4**, use the `feature/dev53` branch to avoid:
 > - Forward-incompatible assets from 5.5
 > - Missing `FRHIGPUBufferReadback` API
 
