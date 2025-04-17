@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.0.0-55",
+	"VersionName": "1.2.0-55",
 	"FriendlyName": "LXRFlux",
 	"Description": "LXRFlux: GPU Light Detection System",
 	"Category": "Light Detection",
