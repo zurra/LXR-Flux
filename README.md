@@ -228,7 +228,30 @@ LXRFlux is plug-and-play and can be used in both **Blueprints** and **C++** with
 
    🎥 ![GetData](https://github.com/user-attachments/assets/c6814476-1374-4a0d-987c-0bc08846b0f5)
 
-3. **Debug Widgets**
+
+### 🧠 In C++
+
+1. **Add the Component in Your Header (.h):**
+   ```cpp
+   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "LXR")
+   class ULXRFluxComponent* FluxComponent;
+   ```
+
+2. **Create It in Your Constructor (.cpp):**
+   ```cpp
+   FluxComponent = CreateDefaultSubobject<ULXRFluxComponent>(TEXT("LXRFlux"));
+   FluxComponent->SetupAttachment(RootComponent);
+   ```
+
+3. **Read Lighting Data Anywhere:**
+   ```cpp
+   float CurrentLuminance = FluxComponent->Luminance;
+   FLinearColor CurrentColor = FluxComponent->Color;
+   ```
+
+---
+
+### **Debug Widgets**
 
    Use the Console Command `FLXRFlux.debug.capture 1` to enable the LXRFlux Light Detection Debug widget.
 
@@ -300,25 +323,47 @@ Feel free to adjust smoothing speed or buffer size depending on your use case.
 
 ---
 
-### 🧠 In C++
 
-1. **Add the Component in Your Header (.h):**
-   ```cpp
-   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "LXR")
-   class ULXRFluxComponent* FluxComponent;
-   ```
+## 📸 Capture Setup
 
-2. **Create It in Your Constructor (.cpp):**
-   ```cpp
-   FluxComponent = CreateDefaultSubobject<ULXRFluxComponent>(TEXT("LXRFlux"));
-   FluxComponent->SetupAttachment(RootComponent);
-   ```
+### 🔍 Selective Actor Inclusion via Component Tags
 
-3. **Read Lighting Data Anywhere:**
-   ```cpp
-   float CurrentLuminance = FluxComponent->Luminance;
-   FLinearColor CurrentColor = FluxComponent->Color;
-   ```
+LXRFlux isolates scene capture visibility using a component-driven filtering system. Only actors explicitly tagged with `ULXRFluxRenderActorComponent` are included in the render pass for analysis.
+
+At LXRFlux Initialization, all instances of this component are gathered:
+
+```cpp
+TArray<AActor*> ActorsToRender;
+
+for (TObjectIterator<ULXRFluxRenderActorComponent> Itr; Itr; ++Itr)
+{
+	AActor* Actor = Itr->GetOwner();
+	if (Actor != nullptr)
+	{
+		ActorsToRender.Add(Actor);
+	}
+}
+```
+
+The collected actors are then whitelisted in the SceneCapture:
+
+```cpp
+SceneCapture->ShowOnlyActors.Append(ActorsToRender);
+```
+
+This ensures **only the relevant actors** contribute to the capture buffer — avoiding visual contamination from gameplay actors, the LXR system owner, or unrelated geometry.
+
+### 🧱 Use Case
+
+This system is ideal when:
+- You need **clean indirect lighting samples** without noise from the full scene.
+- You want to define a subset of **proxy or lighting-only geometry**.
+- You need to suppress contributions from highly dynamic or emissive actors.
+
+### ✅ To include an actor:
+Add `ULXRFluxRenderActorComponent` to it. That’s it.
+
+> This component acts as an opt-in flag. Any actor with it will be included in the next capture cycle.
 
 ---
 
