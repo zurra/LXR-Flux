@@ -76,6 +76,17 @@ public:
 	UPROPERTY(EditAnywhere, Category="LXRFlux|Detection")
 	float LuminanceThreshold = 0.1f;
 
+	/**
+	* Logarithmic adjustment for the exposure.
+	* 0: no adjustment, -1:2x darker, -2:4x darker, 1:2x brighter, 2:4x brighter, ...
+	*/
+	UPROPERTY(EditAnywhere, Category="LXRFlux|Detection")
+	float AutoExposureBias = 8.f;
+
+	UPROPERTY(EditAnywhere, Category="LXRFlux|Detection")
+	float CaptureMeshScale = 1.f;
+
+
 	UFUNCTION(BlueprintPure, Category="LXRFlux|Detection|Indirect")
 	UTextureRenderTarget2D* GetBotTarget() const { return BotRT; }
 
@@ -125,7 +136,7 @@ private:
 
 
 	UPROPERTY()
-	TWeakObjectPtr<UUserWidget> IndirectDebugWidget;
+	TWeakObjectPtr<UUserWidget> DebugCanvasWidget;
 
 	UPROPERTY()
 	TObjectPtr<USceneCaptureComponent2D> TopSceneCaptureComponent;

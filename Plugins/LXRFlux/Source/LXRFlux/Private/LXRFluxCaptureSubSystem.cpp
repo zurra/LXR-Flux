@@ -31,13 +31,29 @@ SOFTWARE.
 
 ULXRFluxSubSystem::ULXRFluxSubSystem(const FObjectInitializer& ObjectInitializer)
 {
-	ConstructorHelpers::FObjectFinder<UMaterialInterface> IndirectPostProcessFinder(TEXT("/LXRFlux/Materials/PP_LXR_HDR_FULLRANGE.PP_LXR_HDR_FULLRANGE"));
+	ConstructorHelpers::FObjectFinder<UMaterialInterface> IndirectPostProcessFinder(TEXT("/LXR/Materials/PP_LXR_HDR_FULLRANGE.PP_LXR_HDR_FULLRANGE"));
 	if (IndirectPostProcessFinder.Succeeded())
 	{
 		IndirectPostProcessMaterial = IndirectPostProcessFinder.Object;
 	}
 
 	CaptureInterface = MakeUnique<FLXRFluxCaptureInterface>();
+
+
+}
+
+FString ULXRFluxSubSystem::GetLXRAssetPath()
+{
+	FString Path;
+	if (FModuleManager::Get().IsModuleLoaded(TEXT("LXR")))
+	{
+		Path = "/LXR";
+	}
+	else
+	{
+		Path = "/LXRFlux";
+	}
+	return Path;
 }
 
 void ULXRFluxSubSystem::Initialize(FSubsystemCollectionBase& Collection)
