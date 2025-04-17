@@ -31,7 +31,9 @@ SOFTWARE.
 #include "LXRFlux.h"
 #include "LXRFluxAnalyze.h"
 #include "LXRFluxCaptureSubSystem.h"
+#include "LXRFluxDebugCanvasWidget.h"
 #include "LXRFLuxLightDetectorChildActor.h"
+#include "LXRFluxRenderActorComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -210,9 +212,13 @@ void ULXRFluxLightDetector::FetchLumenCVars(IConsoleVariable* Var)
 
 	if (bFLXRFluxDebugCaptureWidgetEnabled)
 	{
-		if (!IndirectDebugWidget.IsValid())
+		if (!DebugCanvasWidget.IsValid())
 		{
-			const FSoftClassPath SoftCanvasPath(TEXT("/LXRFlux/Widget/WB_LxrCanvas.WB_LxrCanvas_C"));
+			ULXRFluxSubSystem* SubSystem = GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>();
+			FString AssetPath = SubSystem->GetLXRAssetPath();
+
+			FString WidgetPath = AssetPath + "/Widget/WB_LxrCanvas.WB_LxrCanvas_C";
+			const FSoftClassPath SoftCanvasPath(WidgetPath);
 
 			TSubclassOf<UUserWidget> WidgetClass = SoftCanvasPath.TryLoadClass<UUserWidget>();
 
@@ -221,20 +227,25 @@ void ULXRFluxLightDetector::FetchLumenCVars(IConsoleVariable* Var)
 				UUserWidget* Widget = CreateWidget<UUserWidget>(GetWorld(), WidgetClass);
 				if (Widget)
 				{
-					IndirectDebugWidget = Widget;
+					DebugCanvasWidget = Widget;
 				}
 			}
 		}
-		if (IndirectDebugWidget.IsValid())
+		if (DebugCanvasWidget.IsValid())
 		{
-			IndirectDebugWidget->AddToViewport();
+			DebugCanvasWidget->AddToViewport();
+
+			if (ULXRFluxDebugCanvasWidget* FluxDebugCanvasWidget = Cast<ULXRFluxDebugCanvasWidget>(DebugCanvasWidget.Get()))
+			{
+				FluxDebugCanvasWidget->SetDebugActor(GetOwner());
+			}
 		}
 	}
 	else
 	{
-		if (IndirectDebugWidget.IsValid())
+		if (DebugCanvasWidget.IsValid())
 		{
-			IndirectDebugWidget->RemoveFromParent();
+			DebugCanvasWidget->RemoveFromParent();
 		}
 	}
 }
@@ -350,6 +361,15 @@ void ULXRFluxLightDetector::EndPlay(const EEndPlayReason::Type EndPlayReason)
 // Called every frame
 void ULXRFluxLightDetector::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
+	if (ChildActorComponent && ChildActorComponent->GetChildActor())
+	{
+		AActor* Child = ChildActorComponent->GetChildActor();
+		Child->GetRootComponent()->SetWorldRotation(FRotator::ZeroRotator);
+		Child->GetRootComponent()->SetWorldScale3D(FVector(CaptureMeshScale));
+
+	}
+
+
 	if (bFLXRFluxDisabled)
 	{
 		GEngine->AddOnScreenDebugMessage(static_cast<int32>(GetUniqueID()), DeltaTime, FColor::Red, FString::Printf(TEXT("FLXRFlux Indirect Disabled")));
@@ -377,80 +397,6 @@ void ULXRFluxLightDetector::TickComponent(float DeltaTime, ELevelTick TickType, 
 		GEngine->AddOnScreenDebugMessage(static_cast<int32>(GetUniqueID()), DeltaTime, FColor::Red, FString::Printf(TEXT("FLXRFlux Indirect %s Disabled"), *Disabled));
 	}
 
-
-	// if (bFLXRFluxDebugCaptureWidgetEnabled)
-	// {
-	// 	for (auto& CaptureComponent2D : SceneCaptures)
-	// 	{
-	// 		DrawDebugCamera(GetWorld(), CaptureComponent2D->GetComponentLocation(), CaptureComponent2D->GetComponentRotation(), CaptureComponent2D->FOVAngle, 4, FColor::Green, 0,
-	// 		                DeltaTime);
-	//
-	// 		ChildActorComponent->GetChildActor()->SetActorLocation(GetOwner()->GetActorLocation());
-	// 		ChildActorComponent->SetWorldLocation(GetOwner()->GetActorLocation());
-	//
-	// 		DrawDebugDirectionalArrow(GetWorld(), GetOwner()->GetActorLocation(), ChildActorComponent.Get()->GetChildActor()->GetActorLocation(), 250.f, FColor::Red);
-	// 	}
-	// }
-
-	// Luminance = FMath::FInterpConstantTo(Luminance, LuminanceTarget, DeltaTime, 2);
-	// ColorOutput = FMath::CInterpTo(ColorOutput, ColorOutputTarget, DeltaTime, 2);
-	// IndirectMeshComponent->SetWorldRotation(FQuat::MakeFromEuler(FVector::RightVector));
-	// TopSceneCaptureComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(r ? 0 : 0, r ? 90 : -90, 45.f)), FVector(0, 0, r ? -120 : 120)));
-	// BotSceneCaptureComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(r ? 0 : 0, r ? -90 : 90, 45.f)), FVector(0, 0, r ? 120 : -120)));
-
-	// TargetChangeTimer += DeltaTime;
-
-	// if (TargetChangeTimer > 0.03f)
-	// {
-	// 	// TargetChangeTimer = 0;
-	// 	TargetLocation = TargetLocation * (FVector::UpVector * -1);
-	// 	IndirectMeshComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(r ? 0 : 1, r ? 0 : 1, r ? 0 : 1)), IndirectMeshComponent->GetRelativeLocation(),
-	// 	                                                       FVector(1, 1, 1)));
-	// 	// auto x = IndirectMeshComponent->GetRelativeRotation().Euler();
-	// 	// auto V = FVector::RightVector;
-	// 	// V=V*45;
-	// 	// IndirectMeshComponent->AddWorldRotation(FRotator::MakeFromEuler(V));
-	//
-	// 	TopSceneCaptureComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(0, -90, 45.f)), FVector(0, 0, r ? 75 : 70)));
-	// 	BotSceneCaptureComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(0, 90, 45.f)), FVector(0, 0, r ? -75 : -70)));
-	// 	r = !r;
-	// }
-
-
-	// Luminance = GetBrightness();
-	// ColorOutput = GetColor();
-
-	// TargetChangeTimer += DeltaTime;
-	//
-	// if (TargetChangeTimer > 0.025)
-	// {
-	// 	for (auto SceneCapture : SceneCaptures)
-	// 	{
-	// 		TargetChangeTimer = 0;
-	// 		// SceneCapture->bCaptureEveryFrame = true;
-	// 		SceneCapture->CaptureSceneDeferred();
-	// 	}
-	// }
-
-	// int32 FrameNumber = GFrameNumber;
-	//
-	// UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux - Tick:%d ]"), FrameNumber);
-	//
-	// if (IsReadbackReady(IndirectAnalyzeDispatchParams))
-	// {
-	// 	IndirectAnalyzeDispatchParams->bReadingInProgress;
-	// 	IndirectAnalyzeDispatchParams->ReadbackReadyFrames++;
-	//
-	// 	UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux] Waiting... Frames: %d"), IndirectAnalyzeDispatchParams->ReadbackReadyFrames);
-	//
-	// 	if (IndirectAnalyzeDispatchParams->ReadbackReadyFrames > 5)
-	// 	{
-	// 		UE_LOG(LogTemp, Warning, TEXT("Readback ready, dispatching GPU read..."));
-	//
-	// 		TriggerReadback(IndirectAnalyzeDispatchParams);
-	// 	}
-	// }
-
 	HandleOneShotSceneCaptureCooldown();
 
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
@@ -465,7 +411,7 @@ float ULXRFluxLightDetector::GetFinalLuminanceValue() const
 	{
 	case TargetValueOverTime:
 		{
-			return FMath::FInterpConstantTo(Luminance, LastLuminance, DeltaReadSeconds, 50.f);
+			return FMath::FInterpConstantTo(Luminance, LastLuminance, DeltaReadSeconds, TargetValueSmoothSpeed);
 		}
 
 	case HistoryBuffer:
@@ -494,7 +440,7 @@ FLinearColor ULXRFluxLightDetector::GetFinalColorValue() const
 	{
 	case TargetValueOverTime:
 		{
-			return FMath::CInterpTo(Color, LastColor, DeltaReadSeconds, 50.f);
+			return FMath::CInterpTo(Color, LastColor, DeltaReadSeconds, TargetValueSmoothSpeed);
 		}
 
 	case HistoryBuffer:
@@ -646,12 +592,14 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 	// 	}
 	// }
 
+	ULXRFluxSubSystem* SubSystem = GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>();
+	FString AssetPath = SubSystem->GetLXRAssetPath();
+	FString MeshPath = AssetPath + "/Assets/LXRIndirectMeshV2.LXRIndirectMeshV2";
+	FString MaterialPath = AssetPath + "/Assets/LXRIndirectMeshMat.LXRIndirectMeshMat";
+	UStaticMesh* IndirectMesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), NULL, *MeshPath));
+	UMaterial* IndirectMeshMat = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr, *MaterialPath));
 
-	UStaticMesh* IndirectMesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), NULL, TEXT("/LXRFlux/Assets/LXRIndirectMeshV2.LXRIndirectMeshV2")));
-	// IndirectMesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), NULL, TEXT("/FLXRFlux/Assets/FLXRFluxIndirectMesh.FLXRFluxIndirectMesh")));
 	IndirectMeshComponent = Cast<UStaticMeshComponent>(ChildActorComponent->GetChildActor()->GetComponentByClass(UStaticMeshComponent::StaticClass()));
-
-	UMaterial* IndirectMeshMat = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr,TEXT("/LXRFlux/Assets/LXRIndirectMeshMat.LXRIndirectMeshMat")));
 	IndirectMatInst = UKismetMaterialLibrary::CreateDynamicMaterialInstance(GetWorld(), IndirectMeshMat, "IndirectMatInst");
 	IndirectMatInst->SetScalarParameterValue("SingleCapture", 0);
 	// IndirectMeshComponent->SetupAttachment(ChildActorComponent.Get()->GetChildActor()->GetRootComponent());
@@ -706,13 +654,29 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 		SceneCapture->bCaptureEveryFrame = false;
 		SceneCapture->bCaptureOnMovement = false;
 		SceneCapture->bConsiderUnrenderedOpaquePixelAsFullyTranslucent = true;
-		SceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
+
 		SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorHDR;
-		if (bCaptureIndirect && !bCaptureDirect)
+		SceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+		
+		TArray<AActor*> ActorsToRender;
+		
+		for (TObjectIterator<ULXRFluxRenderActorComponent> Itr; Itr; ++Itr)
 		{
-			SceneCapture->ShowOnlyActorComponents(GetOwner());
-			SceneCapture->ShowOnlyComponent(IndirectMeshComponent);
+			AActor* Actor = Itr->GetOwner();
+			if (Actor != nullptr)
+			{
+				ActorsToRender.Add(Actor);
+			}
 		}
+
+		for (auto ToRender : ActorsToRender)
+		{
+			SceneCapture->ShowOnlyActors.Append(ActorsToRender);
+		}
+
+		SceneCapture->ShowOnlyComponent(IndirectMeshComponent);
+		SceneCapture->ShowOnlyActorComponents(ChildActorComponent.Get()->GetChildActor());
+
 		SceneCapture->FOVAngle = 35;
 		SceneCapture->TextureTarget->SizeX = RenderTextureSize;
 		SceneCapture->TextureTarget->SizeY = RenderTextureSize;
