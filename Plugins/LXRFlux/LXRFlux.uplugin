@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.0.0-55",
+	"VersionName": "1.2.0-53-54",
 	"FriendlyName": "LXRFlux",
 	"Description": "LXRFlux: GPU Light Detection System",
 	"Category": "Light Detection",
@@ -9,7 +9,6 @@
 	"CreatedByURL": "",
 	"DocsURL": "https://github.com/zurra/LXR-Flux/",
 	"SupportURL": "https://discord.gg/aWvgSa9mKd",
-	"EngineVersion": "5.5.0",
 	"CanContainContent": true,
 	"Installed": false,
 	"Modules": [
