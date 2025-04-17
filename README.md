@@ -483,6 +483,96 @@ Pull requests are welcome. If you have suggestions, bug reports, or cool use cas
 
 ---
 
+## 🛠️ Development & Branching Strategy
+
+### 🔀 Git Flow
+
+This repository follows the **[Git Flow](https://nvie.com/posts/a-successful-git-branching-model/)** branching model.
+
+Key branches:
+
+- `main`:  
+  Production-ready, stable releases only.
+  
+- `develop`:  
+  Ongoing development. Contains the latest tested but not-yet-released features.
+
+- `feature/*`:  
+  Individual feature branches branched off of `develop`.
+
+- `release/*`:  
+  Used to prepare a new release. Branched from `develop`, merged into `main` and `develop` when ready.
+
+- `hotfix/*`:  
+  For critical fixes to `main`. Merged into both `main` and `develop`.
+
+---
+
+
+## 🛠️ Git Flow + Unreal Engine Versioning Strategy
+
+This repository uses a **Git Flow**-inspired branching model, adapted for Unreal Engine compatibility.
+
+### 🌿 Branch Overview
+
+- `main`:  
+  Stable, production-ready plugin releases.
+
+- `develop`:  
+  The main integration branch for the **latest supported Unreal version**.
+
+- `feature/dev54`, `feature/dev53`, etc.:  
+  These are **active development branches per Unreal version**.  
+  For example:
+  - `feature/dev54`: current Unreal Engine 5.4 development
+  - `feature/dev53`: maintained branch for 5.3-specific features or fixes
+
+This approach allows:
+- 🧩 Clean isolation of version-specific changes (e.g., breaking API changes in 5.4)
+- 🔁 Cherry-picking or merging shared features across engine versions
+- 🚀 Safe staging of new features before merging into `develop` or tagging for release
+
+---
+
+### ✍️ Example Workflow
+
+1. Develop new feature on a version-specific branch:
+   ```bash
+   git checkout -b feature/my-awesome-thing feature/dev54
+   ```
+
+2. Merge into the main dev branch for that UE version:
+   ```bash
+   git checkout feature/dev54
+   git merge feature/my-awesome-thing
+   ```
+
+3. (Optional) Backport to older UE version:
+   ```bash
+   git checkout feature/dev53
+   git cherry-pick <commit_hash>
+   ```
+
+4. Tag when stable:
+   ```bash
+   git tag -a v1.4.0-54 -m "Release for UE 5.4"
+   git push origin v1.4.0-54
+   ```
+
+---
+
+### 📦 Release Tags
+
+We use semantic versioning with Unreal suffixes:
+
+```
+v1.4.0-54   → for Unreal Engine 5.4
+v1.3.2-53   → for Unreal Engine 5.3
+```
+
+This allows version-specific package distribution.
+
+---
 
 ### 🛠️ LXRFlux – Advanced TODO
 
