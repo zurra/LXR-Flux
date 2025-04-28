@@ -30,7 +30,7 @@ SOFTWARE.
 #include "Materials/MaterialInterface.h"
 #include "LXRFluxCaptureSubSystem.generated.h"
 
-class ULXRFluxLightDetector;
+class ULXRFluxLightDetectorComponent;
 /**
  * 
  */
@@ -38,19 +38,20 @@ UCLASS()
 class LXRFLUX_API ULXRFluxSubSystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
+
 public:
 	ULXRFluxSubSystem(const FObjectInitializer& ObjectInitializer);
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	UPROPERTY(EditAnywhere,BlueprintReadOnly,Category="LXRFlux|Capture|PostProcess")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LXRFlux|Capture|PostProcess")
 	UMaterialInterface* IndirectPostProcessMaterial;
 
 	void DoCaptures();
 
 	TUniquePtr<FLXRFluxCaptureInterface> CaptureInterface;
-	
+
 	FDelegateHandle OnPostResolvedSceneColorHandle;
 
 	bool bStopRender = false;
@@ -60,4 +61,5 @@ public:
 
 	static FString GetLXRAssetPath();
 
+	void StartABTestIndividualGISettings(UWorld* World);
 };

@@ -34,7 +34,7 @@ DEFINE_LOG_CATEGORY(LogLXRFlux);
 
 void FLXRFluxModule::StartupModule()
 {
-	FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("LXRFlux"))->GetBaseDir(), TEXT("Shaders"));
+	FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("LXRFlux"))->GetBaseDir(), TEXT("Shaders/LXRFlux"));
 	AddShaderSourceDirectoryMapping(TEXT("/LXRFlux_Shaders"), PluginShaderDir);
 }
 
