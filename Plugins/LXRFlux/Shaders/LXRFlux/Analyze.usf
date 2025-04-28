@@ -1,0 +1,45 @@
+﻿#include "/Engine/Private/Common.ush"
+
+RWBuffer<uint> OutData : register(u0);
+
+Texture2D<float4> InSceneCapture : register(t0); // HDR input 
+
+float LuminanceThreshold;
+
+SamplerState LinearSampler : register(s0);
+
+#define INDEX_R 0
+#define INDEX_G 1
+#define INDEX_B 2
+#define INDEX_MAX_LUM 3
+
+#define INDEX_COUNT 8
+
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+void MainReadData(uint3 DTid : SV_DispatchThreadID)
+{
+	uint2 TexSize;
+	InSceneCapture.GetDimensions(TexSize.x, TexSize.y);
+
+	if (DTid.x >= TexSize.x || DTid.y >= TexSize.y)
+		return;
+
+	float3 Color = InSceneCapture.Load(int3(DTid.xy, 0)).rgb;
+
+	float Luminance = dot(Color, float3(0.2126, 0.7152, 0.0722));
+
+	uint EncodedR = uint(Color.r * LUMINANCE_SCALE);
+	uint EncodedG = uint(Color.g * LUMINANCE_SCALE);
+	uint EncodedB = uint(Color.b * LUMINANCE_SCALE);
+	uint EncodedLuminance = uint(Luminance * LUMINANCE_SCALE);
+
+	if (Luminance > LuminanceThreshold)
+	{
+		InterlockedMax(OutData[INDEX_R], EncodedR);
+		InterlockedMax(OutData[INDEX_G], EncodedG);
+		InterlockedMax(OutData[INDEX_B], EncodedB);
+		InterlockedMax(OutData[INDEX_MAX_LUM], EncodedLuminance);
+
+		InterlockedAdd(OutData[INDEX_COUNT], 1);
+	}
+}

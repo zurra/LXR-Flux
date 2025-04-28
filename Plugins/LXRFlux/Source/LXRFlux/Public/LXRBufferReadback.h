@@ -29,7 +29,6 @@ SOFTWARE.
 #include "Runtime/Launch/Resources/Version.h"
 #include "RHIGPUReadback.h"
 
-
 class FRDGBuilder;
 
 

@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+
 #include "LXRFluxAnalyze.h"
 
 #include "LXRBufferReadback.h"
@@ -37,7 +38,31 @@ SOFTWARE.
 #include "SceneRenderTargetParameters.h"
 #include "ScreenPass.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Math/UnrealMathUtility.h"
+#include "Async/Async.h"
 #include "Math/UnitConversion.h"
+
+
+namespace LXRFluxCaptureIndex
+{
+	constexpr uint32 INDEX_R = 0;
+	constexpr uint32 INDEX_G = 1;
+	constexpr uint32 INDEX_B = 2;
+	constexpr uint32 INDEX_MAX_LUM = 3;
+	constexpr uint32 INDEX_COUNT = 8;
+}
+
+namespace LXRFluxCaptureConstants
+{
+	constexpr uint32 NUM_THREADS_X = 32;
+	constexpr uint32 NUM_THREADS_Y = 32;
+	constexpr uint32 NUM_THREADS_Z = 1;
+	constexpr float LUMINANCE_SCALE = 10000.0f;
+
+	constexpr uint32 FLXRFluxBufferElements = 5;
+	constexpr uint32 FLXRFluxBufferBytes = FLXRFluxBufferElements * sizeof(uint32);
+}
+
 
 DECLARE_STATS_GROUP(TEXT("FLXRFluxCapture"), STATGROUP_FLXRFluxCapture, STATCAT_Advanced);
 
@@ -50,8 +75,7 @@ class LXRFLUX_API FLXRFluxIndirectAnalyze : public FGlobalShader
 	SHADER_USE_PARAMETER_STRUCT(FLXRFluxIndirectAnalyze, FGlobalShader);
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters,)
-		SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, InScene_Top)
-		SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, InScene_Bot)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, InSceneCapture)
 
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutData)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<uint>, OutCount)
@@ -64,10 +88,10 @@ class LXRFLUX_API FLXRFluxIndirectAnalyze : public FGlobalShader
 
 		const FPermutationDomain PermutationVector(Parameters.PermutationId);
 
-		OutEnvironment.SetDefine(TEXT("THREADS_X"), NUM_THREADS_X);
-		OutEnvironment.SetDefine(TEXT("THREADS_Y"), NUM_THREADS_Y);
-		OutEnvironment.SetDefine(TEXT("THREADS_Z"), NUM_THREADS_Z);
-		OutEnvironment.SetDefine(TEXT("LUMINANCE_SCALE"), LUMINANCE_SCALE);
+		OutEnvironment.SetDefine(TEXT("THREADS_X"), LXRFluxCaptureConstants::NUM_THREADS_X);
+		OutEnvironment.SetDefine(TEXT("THREADS_Y"), LXRFluxCaptureConstants::NUM_THREADS_Y);
+		OutEnvironment.SetDefine(TEXT("THREADS_Z"), LXRFluxCaptureConstants::NUM_THREADS_Z);
+		OutEnvironment.SetDefine(TEXT("LUMINANCE_SCALE"), LXRFluxCaptureConstants::LUMINANCE_SCALE);
 	}
 
 private:
@@ -86,26 +110,26 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 	RDG_GPU_STAT_SCOPE(GraphBuilder, FLXRFluxCapture);
 	SCOPED_DRAW_EVENT(RHICmdList, STAT_FLXRFluxCapture_Execute);
 
-	constexpr uint32 FLXRFluxIndirectBufferElements = 5;
-	constexpr uint32 FLXRFluxIndirectBufferBytes = FLXRFluxIndirectBufferElements * sizeof(uint32);
-
 
 	TShaderMapRef<FLXRFluxIndirectAnalyze> ComputeShader(GetGlobalShaderMap(GMaxRHIFeatureLevel));
 	if (ComputeShader.IsValid())
 	{
 		DispatchParams->Fence = RHICreateGPUFence(TEXT("CaptureFence"));
 
-		FTextureRHIRef InputRHI_Top = DispatchParams->RenderTargetTop->GetRenderTargetTexture();
-		FTextureRHIRef InputRHI_Bot = DispatchParams->RenderTargetBot->GetRenderTargetTexture();
+		ELXRFluxCaptureStep CurrentStep = static_cast<ELXRFluxCaptureStep>(DispatchParams->CaptureStepCounter);
+		FTextureRHIRef InputRHI = CurrentStep == ELXRFluxCaptureStep::Top
+			                          ? DispatchParams->RenderTargetTop->GetRenderTargetTexture()
+			                          : DispatchParams->RenderTargetBot->GetRenderTargetTexture();
 
-		FRDGTextureRef SceneHDR_Top = GraphBuilder.RegisterExternalTexture(CreateRenderTarget(InputRHI_Top, TEXT("SceneHDR_Top")));
-		FRDGTextureRef SceneHDR_Bot = GraphBuilder.RegisterExternalTexture(CreateRenderTarget(InputRHI_Bot, TEXT("SceneHDR_Bot")));
 
-		FRDGBufferRef OutDataBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 5), TEXT("OutputDataBuffer"));
+		FRDGTextureRef SceneHDR = GraphBuilder.RegisterExternalTexture(CreateRenderTarget(InputRHI, TEXT("SceneHDR")));
+		// FRDGTextureRef SceneHDR_Bot = GraphBuilder.RegisterExternalTexture(CreateRenderTarget(InputRHI_Bot, TEXT("SceneHDR_Bot")));
+
+		FRDGBufferRef OutDataBuffer = GraphBuilder.CreateBuffer(FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), LXRFluxCaptureConstants::FLXRFluxBufferElements), TEXT("OutputDataBuffer"));
 
 		auto* PassParams = GraphBuilder.AllocParameters<FLXRFluxIndirectAnalyze::FParameters>();
-		PassParams->InScene_Top = SceneHDR_Top;
-		PassParams->InScene_Bot = SceneHDR_Bot;
+		PassParams->InSceneCapture = SceneHDR;
+		// PassParams->InScene_Bot = SceneHDR_Bot;
 
 		PassParams->OutData = GraphBuilder.CreateUAV(FRDGBufferUAVDesc(OutDataBuffer, PF_R32_UINT));
 		PassParams->LuminanceThreshold = DispatchParams->LuminanceThreshold;
@@ -122,7 +146,7 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 		                             FIntVector(FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().X, 8), FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().Y, 8), 1));
 
 
-		DispatchParams->DataReadbackBuffer->EnqueueCopy(GraphBuilder, OutDataBuffer, FLXRFluxIndirectBufferBytes);
+		DispatchParams->DataReadbackBuffer->EnqueueCopy(GraphBuilder, OutDataBuffer, LXRFluxCaptureConstants::FLXRFluxBufferBytes);
 
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("IndirectAnalyze_Finalize"),
@@ -167,27 +191,37 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 	if (bReady)
 	{
 		// const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(5 * sizeof(uint32)));
-		const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(5 * sizeof(uint32)));
+		const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(LXRFluxCaptureConstants::FLXRFluxBufferBytes));
 
-		constexpr float LuminanceScale = LUMINANCE_SCALE;
+		constexpr float LuminanceScale = LXRFluxCaptureConstants::LUMINANCE_SCALE;
 
-		uint32 EncodedR = DataBuffer[0];
-		uint32 EncodedG = DataBuffer[1];
-		uint32 EncodedB = DataBuffer[2];
-		uint32 Count = DataBuffer[3];
-		uint32 EncodedLuminance = DataBuffer[4];
+		uint32 EncodedR = DataBuffer[LXRFluxCaptureIndex::INDEX_R];
+		uint32 EncodedG = DataBuffer[LXRFluxCaptureIndex::INDEX_G];
+		uint32 EncodedB = DataBuffer[LXRFluxCaptureIndex::INDEX_B];
+		uint32 EncodedLuminance = DataBuffer[LXRFluxCaptureIndex::INDEX_MAX_LUM];
+		uint32 Count = DataBuffer[LXRFluxCaptureIndex::INDEX_COUNT];
 
 
 		float FinalR = EncodedR / LuminanceScale;
 		float FinalG = EncodedG / LuminanceScale;
 		float FinalB = EncodedB / LuminanceScale;
 		float Luminance = EncodedLuminance / LuminanceScale;
-		// if (Count > 0)
-		// {
-		// 	FinalR = EncodedR / LuminanceScale / Count;
-		// 	FinalG = EncodedG / LuminanceScale / Count;
-		// 	FinalB = EncodedB / LuminanceScale / Count;
-		// }
+
+		FLinearColor FinalColor = FLinearColor(FinalR, FinalG, FinalB, 1);
+
+		ELXRFluxCaptureStep CurrentStep = static_cast<ELXRFluxCaptureStep>(DispatchParams->CaptureStepCounter);
+
+		if (CurrentStep == ELXRFluxCaptureStep::Top)
+		{
+			DispatchParams->Output->TopColor = FinalColor;
+			DispatchParams->Output->TopLuminance = Luminance;
+		}
+		else
+		{
+			DispatchParams->Output->BotColor = FinalColor;
+			DispatchParams->Output->BotLuminance = Luminance;
+		}
+
 
 		DispatchParams->DataReadbackBuffer->Unlock();
 		DispatchParams->DataReadbackBuffer.Reset();
@@ -197,12 +231,11 @@ void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDi
 
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Raw Count: %u"), Count);
 		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Max Luminance: %.4f"), Luminance);
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] RGB: R=%.4f G=%.4f B=%.4f"), FinalR, FinalG, FinalB);
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Final Luminance Received: %f"), Luminance);
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] RGB: R=%.4f G=%.4f B=%.4f"), FinalColor.R, FinalColor.G, FinalColor.B);
 
 		if (DispatchParams->OnReadbackComplete)
 		{
-			DispatchParams->OnReadbackComplete(Luminance, FLinearColor(FinalR, FinalG, FinalB, 1));
+			DispatchParams->OnReadbackComplete();
 		}
 	}
 	else

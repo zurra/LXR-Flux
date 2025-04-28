@@ -46,6 +46,7 @@ SOFTWARE.
 #include "TimerManager.h"
 #include "TextureResource.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/GameInstance.h"
 #include "GameFramework/Character.h"
 
 
@@ -169,7 +170,7 @@ static TAutoConsoleVariable<float> CVarFLXRFluxIndirectLumenFullSkylightLeakingD
 //
 
 
-ULXRFluxLightDetector::ULXRFluxLightDetector()
+ULXRFluxLightDetectorComponent::ULXRFluxLightDetectorComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false;
@@ -177,7 +178,7 @@ ULXRFluxLightDetector::ULXRFluxLightDetector()
 }
 
 
-void ULXRFluxLightDetector::FetchLumenCVars(IConsoleVariable* Var)
+void ULXRFluxLightDetectorComponent::FetchLumenCVars(IConsoleVariable* Var)
 {
 	bFLXRFluxLumenSceneLightingQuality = CVarFLXRFluxIndirectLumenSceneLightingQuality.GetValueOnGameThread();
 	bFLXRFluxLumenSceneDetail = CVarFLXRFluxIndirectLumenSceneDetail.GetValueOnGameThread();
@@ -212,11 +213,10 @@ void ULXRFluxLightDetector::FetchLumenCVars(IConsoleVariable* Var)
 
 	if (bFLXRFluxDebugCaptureWidgetEnabled)
 	{
-		if (!DebugCanvasWidget.IsValid())
+		if (!IndirectDebugWidget.IsValid())
 		{
 			ULXRFluxSubSystem* SubSystem = GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>();
 			FString AssetPath = SubSystem->GetLXRAssetPath();
-
 			FString WidgetPath = AssetPath + "/Widget/WB_LxrCanvas.WB_LxrCanvas_C";
 			const FSoftClassPath SoftCanvasPath(WidgetPath);
 
@@ -227,32 +227,29 @@ void ULXRFluxLightDetector::FetchLumenCVars(IConsoleVariable* Var)
 				UUserWidget* Widget = CreateWidget<UUserWidget>(GetWorld(), WidgetClass);
 				if (Widget)
 				{
-					DebugCanvasWidget = Widget;
+					IndirectDebugWidget = Widget;
 				}
 			}
 		}
-		if (DebugCanvasWidget.IsValid())
+		if (IndirectDebugWidget.IsValid())
 		{
-			DebugCanvasWidget->AddToViewport();
-
-			if (ULXRFluxDebugCanvasWidget* FluxDebugCanvasWidget = Cast<ULXRFluxDebugCanvasWidget>(DebugCanvasWidget.Get()))
-			{
-				FluxDebugCanvasWidget->SetDebugActor(GetOwner());
-			}
+			IndirectDebugWidget->AddToViewport();
+			ULXRFluxDebugCanvasWidget* DebugCanvas = Cast<ULXRFluxDebugCanvasWidget>(IndirectDebugWidget);
+			DebugCanvas->SetDebugActor(GetOwner());
 		}
 	}
 	else
 	{
-		if (DebugCanvasWidget.IsValid())
+		if (IndirectDebugWidget.IsValid())
 		{
-			DebugCanvasWidget->RemoveFromParent();
+			IndirectDebugWidget->RemoveFromParent();
 		}
 	}
 }
 
-void ULXRFluxLightDetector::BindCvarDelegates()
+void ULXRFluxLightDetectorComponent::BindCvarDelegates()
 {
-	FConsoleVariableDelegate CheckLumenCvarValues = FConsoleVariableDelegate::CreateUObject(this, &ULXRFluxLightDetector::FetchLumenCVars);
+	FConsoleVariableDelegate CheckLumenCvarValues = FConsoleVariableDelegate::CreateUObject(this, &ULXRFluxLightDetectorComponent::FetchLumenCVars);
 
 	CVarFLXRFluxIndirectLumenSceneLightingQuality->SetOnChangedCallback(CheckLumenCvarValues);
 	CVarFLXRFluxIndirectLumenSceneDetail->SetOnChangedCallback(CheckLumenCvarValues);
@@ -271,7 +268,7 @@ void ULXRFluxLightDetector::BindCvarDelegates()
 }
 
 // Called when the game starts
-void ULXRFluxLightDetector::BeginPlay()
+void ULXRFluxLightDetectorComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
@@ -326,18 +323,37 @@ void ULXRFluxLightDetector::BeginPlay()
 	IndirectMeshComponent->SetVisibleInSceneCaptureOnly(!bFLXRFluxDebugMeshEnabled);
 
 
-	IndirectLuminanceHistory = TCircularHistoryBuffer<float>(HistoryCount);
-	IndirectColorHistory = TCircularHistoryBuffer<FLinearColor>(HistoryCount);
-	IndirectAnalyzeDispatchParams = MakeShared<FLXRFluxAnalyzeDispatchParams>();
-	IndirectAnalyzeDispatchParams->IndirectDetector = this;
-	IndirectAnalyzeDispatchParams->LuminanceThreshold = LuminanceThreshold;
-	IndirectAnalyzeDispatchParams->RenderTargetTop = IndirectAnalyzeDispatchParams->IndirectDetector->GetTopTarget()->GameThread_GetRenderTargetResource();
-	IndirectAnalyzeDispatchParams->IndirectDetector->GetTopTarget()->UpdateResourceImmediate();
-	IndirectAnalyzeDispatchParams->RenderTargetBot = IndirectAnalyzeDispatchParams->IndirectDetector->GetBotTarget()->GameThread_GetRenderTargetResource();
-	IndirectAnalyzeDispatchParams->IndirectDetector->GetBotTarget()->UpdateResourceImmediate();
-	IndirectAnalyzeDispatchParams->OnReadbackComplete = [this](float Luminance, FLinearColor Color) { this->OnReadbackComplete(Luminance, Color); };
+	CombinedLuminanceHistory = TCircularHistoryBuffer<float>(HistoryCount);
+	CombinedColorHistory = TCircularHistoryBuffer<FLinearColor>(HistoryCount);
 
-	IndirectAnalyzeDispatchParams->bIsInitialized = true;
+	TopLuminanceHistory = TCircularHistoryBuffer<float>(HistoryCount);
+	TopColorHistory = TCircularHistoryBuffer<FLinearColor>(HistoryCount);
+
+	BotLuminanceHistory = TCircularHistoryBuffer<float>(HistoryCount);
+	BotColorHistory = TCircularHistoryBuffer<FLinearColor>(HistoryCount);
+
+	ValidatedLuminance = MakeUnique<FLXRValidatedFloat>(RequiredStableFrames, DeltaThreshold);
+	ValidatedTopLuminance = MakeUnique<FLXRValidatedFloat>(RequiredStableFrames, DeltaThreshold);
+	ValidatedBotLuminance = MakeUnique<FLXRValidatedFloat>(RequiredStableFrames, DeltaThreshold);
+
+	ValidatedColor = MakeUnique<FLXRValidatedColor>(RequiredStableFrames, DeltaThreshold);
+	ValidatedTopColor = MakeUnique<FLXRValidatedColor>(RequiredStableFrames, DeltaThreshold);
+	ValidatedBotColor = MakeUnique<FLXRValidatedColor>(RequiredStableFrames, DeltaThreshold);
+
+	FluxOutput = MakeShared<FFluxOutput>();
+	CaptureAnalyzeDispatchParams = MakeShared<FLXRFluxAnalyzeDispatchParams>();
+
+	CaptureAnalyzeDispatchParams->FrameCaptureMax = FMath::Max(CaptureRate, 1);
+	CaptureAnalyzeDispatchParams->Output = FluxOutput;
+	CaptureAnalyzeDispatchParams->IndirectDetector = this;
+	CaptureAnalyzeDispatchParams->LuminanceThreshold = bUseLuminanceThreshold ? LuminanceThreshold : 0.0f;;
+	CaptureAnalyzeDispatchParams->RenderTargetTop = CaptureAnalyzeDispatchParams->IndirectDetector->GetTopTarget()->GameThread_GetRenderTargetResource();
+	CaptureAnalyzeDispatchParams->IndirectDetector->GetTopTarget()->UpdateResourceImmediate();
+	CaptureAnalyzeDispatchParams->RenderTargetBot = CaptureAnalyzeDispatchParams->IndirectDetector->GetBotTarget()->GameThread_GetRenderTargetResource();
+	CaptureAnalyzeDispatchParams->IndirectDetector->GetBotTarget()->UpdateResourceImmediate();
+	CaptureAnalyzeDispatchParams->OnReadbackComplete = [this]() { this->OnReadbackComplete(); };
+
+	CaptureAnalyzeDispatchParams->bIsInitialized = true;
 
 
 	//Lazy "late begin play"
@@ -348,27 +364,30 @@ void ULXRFluxLightDetector::BeginPlay()
 	}), 0.1f, false);
 }
 
-void ULXRFluxLightDetector::EndPlay(const EEndPlayReason::Type EndPlayReason)
+void ULXRFluxLightDetectorComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (IndirectAnalyzeDispatchParams.IsValid())
+	if (CaptureAnalyzeDispatchParams.IsValid())
 	{
-		IndirectAnalyzeDispatchParams->OnReadbackComplete.Reset();
-		IndirectAnalyzeDispatchParams.Reset();
+		CaptureAnalyzeDispatchParams->OnReadbackComplete.Reset();
+		CaptureAnalyzeDispatchParams.Reset();
 	}
 	Super::EndPlay(EndPlayReason);
 }
 
 // Called every frame
-void ULXRFluxLightDetector::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void ULXRFluxLightDetectorComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	if (ChildActorComponent && ChildActorComponent->GetChildActor())
 	{
 		AActor* Child = ChildActorComponent->GetChildActor();
 		Child->GetRootComponent()->SetWorldRotation(FRotator::ZeroRotator);
 		Child->GetRootComponent()->SetWorldScale3D(FVector(CaptureMeshScale));
-
+		// Nudge the SceneCaptures because of reasons... (Lumen does not want to update if SceneCapture does not move)
+		TopSceneCaptureComponent->AddRelativeLocation(FVector::UpVector * SceneComponentDeltaChange);
+		BotSceneCaptureComponent->AddRelativeLocation(FVector::UpVector * SceneComponentDeltaChange);
+		IndirectMeshComponent->AddRelativeLocation(FVector::DownVector * SceneComponentDeltaChange);
+		SceneComponentDeltaChange *= -1;
 	}
-
 
 	if (bFLXRFluxDisabled)
 	{
@@ -397,115 +416,337 @@ void ULXRFluxLightDetector::TickComponent(float DeltaTime, ELevelTick TickType, 
 		GEngine->AddOnScreenDebugMessage(static_cast<int32>(GetUniqueID()), DeltaTime, FColor::Red, FString::Printf(TEXT("FLXRFlux Indirect %s Disabled"), *Disabled));
 	}
 
+
+	// if (bFLXRFluxDebugCaptureWidgetEnabled)
+	// {
+	// 	for (auto& CaptureComponent2D : SceneCaptures)
+	// 	{
+	// 		DrawDebugCamera(GetWorld(), CaptureComponent2D->GetComponentLocation(), CaptureComponent2D->GetComponentRotation(), CaptureComponent2D->FOVAngle, 4, FColor::Green, 0,
+	// 		                DeltaTime);
+	//
+	// 		ChildActorComponent->GetChildActor()->SetActorLocation(GetOwner()->GetActorLocation());
+	// 		ChildActorComponent->SetWorldLocation(GetOwner()->GetActorLocation());
+	//
+	// 		DrawDebugDirectionalArrow(GetWorld(), GetOwner()->GetActorLocation(), ChildActorComponent.Get()->GetChildActor()->GetActorLocation(), 250.f, FColor::Red);
+	// 	}
+	// }
+
+	// Luminance = FMath::FInterpConstantTo(Luminance, LuminanceTarget, DeltaTime, 2);
+	// ColorOutput = FMath::CInterpTo(ColorOutput, ColorOutputTarget, DeltaTime, 2);
+	// IndirectMeshComponent->SetWorldRotation(FQuat::MakeFromEuler(FVector::RightVector));
+	// TopSceneCaptureComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(r ? 0 : 0, r ? 90 : -90, 45.f)), FVector(0, 0, r ? -120 : 120)));
+	// BotSceneCaptureComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(r ? 0 : 0, r ? -90 : 90, 45.f)), FVector(0, 0, r ? 120 : -120)));
+
+	// TargetChangeTimer += DeltaTime;
+
+	// if (TargetChangeTimer > 0.03f)
+	// {
+	// 	// TargetChangeTimer = 0;
+	// 	TargetLocation = TargetLocation * (FVector::UpVector * -1);
+	// 	IndirectMeshComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(r ? 0 : 1, r ? 0 : 1, r ? 0 : 1)), IndirectMeshComponent->GetRelativeLocation(),
+	// 	                                                       FVector(1, 1, 1)));
+	// 	// auto x = IndirectMeshComponent->GetRelativeRotation().Euler();
+	// 	// auto V = FVector::RightVector;
+	// 	// V=V*45;
+	// 	// IndirectMeshComponent->AddWorldRotation(FRotator::MakeFromEuler(V));
+	//
+	// 	TopSceneCaptureComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(0, -90, 45.f)), FVector(0, 0, r ? 75 : 70)));
+	// 	BotSceneCaptureComponent->SetRelativeTransform(FTransform(FQuat::MakeFromEuler(FVector(0, 90, 45.f)), FVector(0, 0, r ? -75 : -70)));
+	// 	r = !r;
+	// }
+
+
+	// Luminance = GetBrightness();
+	// ColorOutput = GetColor();
+
+	// TargetChangeTimer += DeltaTime;
+	//
+	// if (TargetChangeTimer > 0.025)
+	// {
+	// 	for (auto SceneCapture : SceneCaptures)
+	// 	{
+	// 		TargetChangeTimer = 0;
+	// 		// SceneCapture->bCaptureEveryFrame = true;
+	// 		SceneCapture->CaptureSceneDeferred();
+	// 	}
+	// }
+
+	// int32 FrameNumber = GFrameNumber;
+	//
+	// UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux - Tick:%d ]"), FrameNumber);
+	//
+	// if (IsReadbackReady(IndirectAnalyzeDispatchParams))
+	// {
+	// 	IndirectAnalyzeDispatchParams->bReadingInProgress;
+	// 	IndirectAnalyzeDispatchParams->ReadbackReadyFrames++;
+	//
+	// 	UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux] Waiting... Frames: %d"), IndirectAnalyzeDispatchParams->ReadbackReadyFrames);
+	//
+	// 	if (IndirectAnalyzeDispatchParams->ReadbackReadyFrames > 5)
+	// 	{
+	// 		UE_LOG(LogTemp, Warning, TEXT("Readback ready, dispatching GPU read..."));
+	//
+	// 		TriggerReadback(IndirectAnalyzeDispatchParams);
+	// 	}
+	// }
+
 	HandleOneShotSceneCaptureCooldown();
 
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 
 
-float ULXRFluxLightDetector::GetFinalLuminanceValue() const
+float ULXRFluxLightDetectorComponent::GetFinalLuminanceValue(EValueToGet ValueToGet)
 {
-	int32 Count = IndirectColorHistory.Num();
+	float Current = 0.0f;
+	float Target = 0.0f;
+	const TCircularHistoryBuffer<float>* HistoryBufferPtr = nullptr;
+	float SmoothSpeed = TargetValueSmoothSpeed;
+	FLXRValidatedFloat* ValidatedFloatPtr = nullptr;
+
+	switch (ValueToGet)
+	{
+	case Top:
+		Current = TopLuminance;
+		Target = FluxOutput->TopLuminance;
+		HistoryBufferPtr = &TopLuminanceHistory;
+		ValidatedFloatPtr = ValidatedTopLuminance.Get();
+		break;
+
+	case Bot:
+		Current = BotLuminance;
+		Target = FluxOutput->BotLuminance;
+		HistoryBufferPtr = &BotLuminanceHistory;
+		ValidatedFloatPtr = ValidatedBotLuminance.Get();
+		break;
+
+	case Combined:
+		Current = Luminance;
+		Target = FluxOutput->Luminance;
+		HistoryBufferPtr = &CombinedLuminanceHistory;
+		ValidatedFloatPtr = ValidatedLuminance.Get();
+		break;
+	}
+
+	if (Target < Current)
+		SmoothSpeed = 1000;
 
 	switch (SmoothMethod)
 	{
 	case TargetValueOverTime:
-		{
-			return FMath::FInterpConstantTo(Luminance, LastLuminance, DeltaReadSeconds, TargetValueSmoothSpeed);
-		}
+		return FMath::FInterpConstantTo(Current, Target, DeltaReadSeconds, SmoothSpeed);
 
 	case HistoryBuffer:
+		if (HistoryBufferPtr)
 		{
 			float Sum = 0.0f;
+			int32 Count = HistoryBufferPtr->Num();
 
 			for (int32 Index = 0; Index < Count; ++Index)
 			{
-				Sum += IndirectLuminanceHistory[Index];
+				Sum += (*HistoryBufferPtr)[Index];
 			}
 			return (Count > 0) ? Sum / Count : 0.0f;
 		}
-	case None:
-		return LastLuminance;
 		break;
+
+	case None:
+		return Target;
+	case ValidateDelta:
+		return ValidatedFloatPtr->Tick(Target);
 	default: ;
 	}
-	return {};
+
+	// Fallback (shouldn't happen, but just in case)
+	return 0.0f;
 }
 
-FLinearColor ULXRFluxLightDetector::GetFinalColorValue() const
+
+FLinearColor ULXRFluxLightDetectorComponent::GetFinalColorValue(EValueToGet ValueToGet)
 {
-	int32 Count = IndirectColorHistory.Num();
+	const FLinearColor* Current = nullptr;
+	const FLinearColor* Target = nullptr;
+	const TCircularHistoryBuffer<FLinearColor>* HistoryBufferPtr = nullptr;
+	float SmoothSpeed = TargetValueSmoothSpeed;
+	FLXRValidatedColor* ValidatedColorPtr = nullptr;
+
+	switch (ValueToGet)
+	{
+	case Top:
+		Current = &TopColor;
+		Target = &FluxOutput->TopColor;
+		HistoryBufferPtr = &TopColorHistory;
+		ValidatedColorPtr = ValidatedTopColor.Get();
+		break;
+
+	case Bot:
+		Current = &BotColor;
+		Target = &FluxOutput->BotColor;
+		HistoryBufferPtr = &BotColorHistory;
+		ValidatedColorPtr = ValidatedBotColor.Get();
+		break;
+
+	case Combined:
+		Current = &Color;
+		Target = &FluxOutput->Color;
+		HistoryBufferPtr = &CombinedColorHistory;
+		ValidatedColorPtr = ValidatedColor.Get();
+		break;
+	}
+
+	if (Target->GetLuminance() < Current->GetLuminance())
+		SmoothSpeed = 1000;
 
 	switch (SmoothMethod)
 	{
 	case TargetValueOverTime:
-		{
-			return FMath::CInterpTo(Color, LastColor, DeltaReadSeconds, TargetValueSmoothSpeed);
-		}
+		return FMath::CInterpTo(*Current, *Target, DeltaReadSeconds, SmoothSpeed);
+
 
 	case HistoryBuffer:
+		if (HistoryBufferPtr)
 		{
 			FLinearColor Sum = FLinearColor::Black;
+			int32 Count = HistoryBufferPtr->Num();
 
 
 			for (int32 Index = 0; Index < Count; ++Index)
 			{
-				Sum += IndirectColorHistory[Index];
+				Sum += (*HistoryBufferPtr)[Index];
 			}
 			return (Count > 0) ? Sum / Count : FLinearColor::Black;
 		}
+		break;
+
 	case None:
-		return LastColor;
+		return *Target;
+	case ValidateDelta:
+		if (ValidatedColorPtr)
+		{
+			return ValidatedColorPtr->Tick(*Target);
+		}
+		break;
 	default: ;
 	}
-	return {};
+
+	// Fallback (shouldn't happen, but just in case)
+	return FLinearColor::Black;
+}
+
+void ULXRFluxLightDetectorComponent::AddNewSamplesToHistory()
+{
+	ELXRFluxCaptureStep CurrentStep = static_cast<ELXRFluxCaptureStep>(CaptureAnalyzeDispatchParams->CaptureStepCounter);
+
+	switch (CurrentStep)
+	{
+	case ELXRFluxCaptureStep::Top:
+		TopLuminanceHistory.Add(FluxOutput->TopLuminance);
+		TopColorHistory.Add(FluxOutput->TopColor);
+		break;
+	case ELXRFluxCaptureStep::Bot:
+		BotLuminanceHistory.Add(FluxOutput->BotLuminance);
+		BotColorHistory.Add(FluxOutput->BotColor);
+		break;
+	case ELXRFluxCaptureStep::Wait:
+		CombinedLuminanceHistory.Add(FluxOutput->Luminance);
+		CombinedColorHistory.Add(FluxOutput->Color);
+		break;
+	}
 }
 
 
-void ULXRFluxLightDetector::OnReadbackComplete(float InLuminance, FLinearColor InColor)
+void ULXRFluxLightDetectorComponent::OnReadbackComplete()
 {
 	ReadCompleteTime = GetWorld()->GetTime().GetRealTimeSeconds();
 	DeltaReadSeconds = ReadCompleteTime - RequestCaptureTime;
 
-	LastLuminance = InLuminance;
-	LastColor = InColor;
-	IndirectLuminanceHistory.Add(LastLuminance);
-	IndirectColorHistory.Add(LastColor);
+	if (static_cast<ELXRFluxCaptureStep>(CaptureAnalyzeDispatchParams->CaptureStepCounter) == ELXRFluxCaptureStep::Wait)
+	{
+		float TotalWeight = TopCaptureWeight + BotCaptureWeight;
+		TotalWeight = FMath::Max(TotalWeight, 1);
 
-	Luminance = GetFinalLuminanceValue();
-	Color = GetFinalColorValue();
+		FluxOutput->Color = (FluxOutput->TopColor * TopCaptureWeight + FluxOutput->BotColor * BotCaptureWeight) / TotalWeight;
+		FluxOutput->Luminance = (FluxOutput->TopLuminance * TopCaptureWeight + FluxOutput->BotLuminance * BotCaptureWeight) / TotalWeight;
+	}
 
-	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Final Luminance Received: %f"), InLuminance);
-	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Final Average Luminance : %f"), Luminance);
+	if (SmoothMethod == HistoryBuffer)
+	{
+		AddNewSamplesToHistory();
+	}
+
+	TopLuminance = GetFinalLuminanceValue(EValueToGet::Top);
+	TopColor = GetFinalColorValue(EValueToGet::Top);
+
+	Luminance = GetFinalLuminanceValue(Combined);
+	Color = GetFinalColorValue(Combined);
+
+	BotLuminance = GetFinalLuminanceValue(EValueToGet::Bot);
+	BotColor = GetFinalColorValue(EValueToGet::Bot);
+
+	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] TopLuminance: %.4f"), TopLuminance);
+	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Top RGB: R=%.4f G=%.4f B=%.4f"), TopColor.R, TopColor.G, TopColor.B);
+	//
+	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Luminance: %.4f"), Luminance);
+	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] RGB: R=%.4f G=%.4f B=%.4f"), Color.R, Color.G, Color.B);
+	//
+	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Bot Luminance: %.4f"), BotLuminance);
+	// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] Bot RGB: R=%.4f G=%.4f B=%.4f"), BotColor.R, BotColor.G, BotColor.B);
 	RequestOneShotCaptureUpdate();
 }
 
 
-void ULXRFluxLightDetector::RequestOneShotCaptureUpdate()
+void ULXRFluxLightDetectorComponent::RequestOneShotCaptureUpdate()
 {
 	RemoveCaptureEveryFrameTimer = 0;
 	bNeedsSceneCaptureUpdate = true;
 
-	for (auto SceneCapture : SceneCaptures)
+	if (!CaptureAnalyzeDispatchParams.IsValid()) return;
+	CaptureAnalyzeDispatchParams->IncreaseCaptureCounter();
+
+	ELXRFluxCaptureStep CurrentStep = static_cast<ELXRFluxCaptureStep>(CaptureAnalyzeDispatchParams->CaptureStepCounter);
+
+	if (CaptureAnalyzeDispatchParams->FrameCounter == 0)
 	{
-		if (SceneCapture)
+		switch (CurrentStep)
 		{
-			SceneCapture->bCaptureEveryFrame = true;
-			SceneCapture->CaptureSceneDeferred();
+		case ELXRFluxCaptureStep::Top:
+		case ELXRFluxCaptureStep::Bot:
+			{
+				const int32 CaptureIndex = static_cast<int32>(CurrentStep);
+
+				if (SceneCaptures.IsValidIndex(CaptureIndex))
+				{
+					if (USceneCaptureComponent2D* Capture = SceneCaptures[CaptureIndex])
+					{
+						Capture->CaptureSceneDeferred();
+					}
+				}
+
+				CaptureAnalyzeDispatchParams->bReadingInProgress = false;
+
+				if (ULXRFluxSubSystem* SubSystem = GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>())
+				{
+					SubSystem->RequestIndirectAnalyze(CaptureAnalyzeDispatchParams);
+					RequestCaptureTime = GetWorld()->GetTime().GetRealTimeSeconds();
+				}
+				break;
+			}
+
+		case ELXRFluxCaptureStep::Wait:
+		default:
+			OnReadbackComplete();
+			break;
 		}
 	}
-	IndirectAnalyzeDispatchParams->bReadingInProgress = false;
-
-	if (ULXRFluxSubSystem* SubSystem = GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>())
+	else
 	{
-		SubSystem->RequestIndirectAnalyze(IndirectAnalyzeDispatchParams);
-		RequestCaptureTime = GetWorld()->GetTime().GetRealTimeSeconds();
+		RequestOneShotCaptureUpdate();
 	}
 }
 
-void ULXRFluxLightDetector::HandleOneShotSceneCaptureCooldown()
+void ULXRFluxLightDetectorComponent::HandleOneShotSceneCaptureCooldown()
 {
-	if (bNeedsSceneCaptureUpdate && ++RemoveCaptureEveryFrameTimer > 1)
+	if (bNeedsSceneCaptureUpdate && ++RemoveCaptureEveryFrameTimer > 2)
 	{
 		for (auto SceneCapture : SceneCaptures)
 		{
@@ -518,7 +759,7 @@ void ULXRFluxLightDetector::HandleOneShotSceneCaptureCooldown()
 	}
 }
 
-void ULXRFluxLightDetector::CreateRenderTargets()
+void ULXRFluxLightDetectorComponent::CreateRenderTargets()
 {
 	int W = RenderTextureSize;
 	int H = RenderTextureSize;
@@ -549,7 +790,7 @@ void ULXRFluxLightDetector::CreateRenderTargets()
 	UE_LOG(LogLXRFlux, Log, TEXT("%s Created RenderTargets"), *GetOwner()->GetName());
 }
 
-void ULXRFluxLightDetector::CreateCapturePrerequisites()
+void ULXRFluxLightDetectorComponent::CreateCapturePrerequisites()
 {
 	TArray<FTransform> CaptureTransforms;
 
@@ -599,16 +840,19 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 	UStaticMesh* IndirectMesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), NULL, *MeshPath));
 	UMaterial* IndirectMeshMat = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr, *MaterialPath));
 
+
 	IndirectMeshComponent = Cast<UStaticMeshComponent>(ChildActorComponent->GetChildActor()->GetComponentByClass(UStaticMeshComponent::StaticClass()));
 	IndirectMatInst = UKismetMaterialLibrary::CreateDynamicMaterialInstance(GetWorld(), IndirectMeshMat, "IndirectMatInst");
+	// checkf(!IndirectMatInst, TEXT("We failed to load the Indirect Material Instance.....!"));
+
 	IndirectMatInst->SetScalarParameterValue("SingleCapture", 0);
 	// IndirectMeshComponent->SetupAttachment(ChildActorComponent.Get()->GetChildActor()->GetRootComponent());
 	IndirectMeshComponent->SetRelativeTransform(FTransform::Identity);
 
 	IndirectMeshComponent->SetStaticMesh(IndirectMesh);
 	IndirectMeshComponent->SetMaterial(0, IndirectMatInst);
-	IndirectMeshComponent->SetAffectDynamicIndirectLighting(true);
-	IndirectMeshComponent->SetAffectDistanceFieldLighting(true);
+	IndirectMeshComponent->SetAffectDynamicIndirectLighting(false);
+	IndirectMeshComponent->SetAffectDistanceFieldLighting(false);
 	IndirectMeshComponent->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
 	IndirectMeshComponent->SetVisibleInSceneCaptureOnly(!bFLXRFluxDebugMeshEnabled);
 
@@ -655,11 +899,12 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 		SceneCapture->bCaptureOnMovement = false;
 		SceneCapture->bConsiderUnrenderedOpaquePixelAsFullyTranslucent = true;
 
-		SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorHDR;
+		SceneCapture->CaptureSource = ESceneCaptureSource::SCS_SceneColorHDR;
 		SceneCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
-		
+
+
+		// Todo move this all to subsystem.
 		TArray<AActor*> ActorsToRender;
-		
 		for (TObjectIterator<ULXRFluxRenderActorComponent> Itr; Itr; ++Itr)
 		{
 			AActor* Actor = Itr->GetOwner();
@@ -669,12 +914,28 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 			}
 		}
 
+		for (TObjectIterator<AActor> Itr; Itr; ++Itr)
+		{
+			AActor* Actor = *Itr;
+			if (Actor->ActorHasTag(*WhiteListTag))
+			{
+				ActorsToRender.Add(Actor);
+			}
+		}
+
+		if (bWhitelistAllStaticMeshActors)
+		{
+			for (TObjectIterator<AStaticMeshActor> Itr; Itr; ++Itr)
+			{
+				ActorsToRender.Add(*Itr);
+			}
+		}
+
 		for (auto ToRender : ActorsToRender)
 		{
 			SceneCapture->ShowOnlyActors.Append(ActorsToRender);
 		}
 
-		SceneCapture->ShowOnlyComponent(IndirectMeshComponent);
 		SceneCapture->ShowOnlyActorComponents(ChildActorComponent.Get()->GetChildActor());
 
 		SceneCapture->FOVAngle = 35;
@@ -687,7 +948,7 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 		SceneCapture->PostProcessSettings = PostProcessSettings;
 		SceneCapture->bAlwaysPersistRenderingState = true;
 
-		SceneCapture->ShowFlags.Materials = false;
+		SceneCapture->ShowFlags.SetMaterials(false);
 
 		// SceneCapture->TextureTarget->RenderTargetFormat = RTF_R32f;
 
@@ -697,7 +958,16 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 		SceneCapture->PostProcessSettings.bOverride_AutoExposureMethod = true;
 		SceneCapture->PostProcessSettings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
 		SceneCapture->PostProcessSettings.bOverride_AutoExposureBias = true;
-		SceneCapture->PostProcessSettings.AutoExposureBias = 8.0f;
+		SceneCapture->PostProcessSettings.AutoExposureBias = AutoExposureBias;
+
+		// ScreenPercentage fix.
+		SceneCapture->ShowFlags.ScreenPercentage = true;
+		SceneCapture->LODDistanceFactor = 1.0f; // optional, avoid streaming bias
+		SceneCapture->PostProcessSettings.ScreenPercentage_DEPRECATED = 88;
+		// r.SceneRenderTargetResizeMethod=2 ; // Prevent dynamic downscale
+		// r.ScreenPercentage=100 ; // Force full-res if needed
+
+
 		SceneCapture->TextureTarget->UpdateResourceImmediate();
 	}
 
@@ -752,7 +1022,7 @@ void ULXRFluxLightDetector::CreateCapturePrerequisites()
 	}
 }
 
-void ULXRFluxLightDetector::UpdatePostprocessingLumenSettings()
+void ULXRFluxLightDetectorComponent::UpdatePostprocessingLumenSettings()
 {
 	for (const auto& SceneCapture : SceneCaptures)
 	{
@@ -771,18 +1041,16 @@ void ULXRFluxLightDetector::UpdatePostprocessingLumenSettings()
 }
 
 
-void ULXRFluxLightDetector::PrepareChildActor()
+void ULXRFluxLightDetectorComponent::PrepareChildActor()
 {
 	TArray<UActorComponent*> ChildActorComponents;
 	GetOwner()->GetComponents(UChildActorComponent::StaticClass(), ChildActorComponents, false);
 	for (const auto& Element : ChildActorComponents)
 	{
-		// if (Cast<UChildActorComponent>(Element)->GetChildActorClass()->IsChildOf(ALXRFLuxLightDetectorChildActor::StaticClass()))
-		// {
-		// 	ChildActorComponent = Cast<UChildActorComponent>(Element);
-		// 	return;
-		// }
-		ChildActorComponent = Cast<UChildActorComponent>(Element);
+		if (Cast<UChildActorComponent>(Element)->GetChildActorClass()->IsChildOf(ALXRFLuxLightDetectorChildActor::StaticClass()))
+		{
+			ChildActorComponent = Cast<UChildActorComponent>(Element);
+		}
 	}
 	if (!ChildActorComponent)
 	{
