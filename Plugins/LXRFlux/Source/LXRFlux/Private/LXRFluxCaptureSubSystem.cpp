@@ -56,19 +56,6 @@ FString ULXRFluxSubSystem::GetLXRAssetPath()
 	return Path;
 }
 
-FString ULXRFluxSubSystem::GetLXRAssetPath()
-{
-	FString Path;
-	if (FModuleManager::Get().IsModuleLoaded(TEXT("LXR")))
-	{
-		Path = "/LXR";
-	}
-	else
-	{
-		Path = "/LXRFlux";
-	}
-	return Path;
-}
 
 void ULXRFluxSubSystem::Initialize(FSubsystemCollectionBase& Collection)
 {
