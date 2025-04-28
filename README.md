@@ -82,10 +82,6 @@ LXRFlux is a lightweight, high-performance lighting analysis system built entire
 - These render targets provide full HDR scene information via **FinalColorHDR**.
 - Captures **only one view per frame** (Top or Bottom)
 - Alternates automatically every tick
-- No more redundant GPU usage!
-
-✅ **Efficient:** 50% fewer captures  
-✅ **Smooth:** More stable and flicker-resistant
 
 | Frame | Action                            |
 |:------|:----------------------------------|
