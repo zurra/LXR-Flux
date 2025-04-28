@@ -30,7 +30,15 @@ SOFTWARE.
 #include "Engine.h"
 #include "GenericPlatform/GenericPlatformMisc.h"
 
-class ULXRFluxLightDetector;
+enum class ELXRFluxCaptureStep : uint8
+{
+	Top = 0,
+	Bot = 1,
+	Wait = 2
+};
+
+struct FFluxOutput;
+class ULXRFluxLightDetectorComponent;
 
 struct FLXRFluxAnalyzeDispatchParams
 {
@@ -39,7 +47,7 @@ struct FLXRFluxAnalyzeDispatchParams
 
 	TUniquePtr<FLXRBufferReadback> DataReadbackBuffer;
 
-	ULXRFluxLightDetector* IndirectDetector = nullptr;
+	ULXRFluxLightDetectorComponent* IndirectDetector = nullptr;
 
 	int32 LuminanceSum;
 	int32 LuminanceCount;
@@ -50,21 +58,26 @@ struct FLXRFluxAnalyzeDispatchParams
 	bool bIsInitialized = false;
 
 	int32 PollingAttempts;
-	
+	uint8 CaptureStepCounter = 0;
+	uint8 FrameCounter = 0;
+	uint8 FrameCaptureMax = 1;
+
 	float LuminanceThreshold;
 
 	FGPUFenceRHIRef Fence;
+	TSharedPtr<FFluxOutput> Output;
 
-	TFunction<void(float Luminance,FLinearColor FinalColor)> OnReadbackComplete;
+	TFunction<void()> OnReadbackComplete;
 
 private:
 	FIntPoint CachedRenderTargetSize = FIntPoint(-1, -1);
 	FIntPoint CachedViewportSize = FIntPoint(-1, -1);
 
 public:
-	FLXRFluxAnalyzeDispatchParams(): LuminanceSum(0), LuminanceCount(0), PollingAttempts(0)
+	FLXRFluxAnalyzeDispatchParams(): LuminanceSum(0), LuminanceCount(0), PollingAttempts(0), LuminanceThreshold(0)
 	{
 	}
+
 
 	FIntPoint GetViewportSize()
 	{
@@ -96,9 +109,27 @@ public:
 	{
 		CachedRenderTargetSize = FIntPoint(InX, InY);
 	}
+
+	void IncreaseCaptureCounter()
+	{
+		FrameCounter++;
+		if (FrameCounter >= FrameCaptureMax)
+		{
+			FrameCounter = 0;
+
+			ELXRFluxCaptureStep CurrentStep = static_cast<ELXRFluxCaptureStep>(CaptureStepCounter);
+			if (CurrentStep == ELXRFluxCaptureStep::Wait)
+			{
+				CaptureStepCounter = 0;
+			}
+			else
+			{
+				CaptureStepCounter++;
+			}
+		}
+	}
 };
 
-// This is a public interface that we define so outside code can invoke our compute shader.
 class LXRFLUX_API FLXRFluxCaptureInterface
 {
 public:
@@ -115,14 +146,11 @@ public:
 		if (IsInRenderingThread())
 		{
 			// UE_LOG(LogTemp, Log, TEXT("[FLXRFlux] DispatchRenderThread: %d"), GFrameNumberRenderThread);
-			DispatchRenderThread(GraphBuilder, SceneTextures,DispatchParams);
+			DispatchRenderThread(GraphBuilder, SceneTextures, DispatchParams);
 		}
 	}
 
 	FLXRFluxCaptureInterface() = default;
 	void DispatchRenderThread(FRDGBuilder& GraphBuilder, const FSceneTextures& SceneTextures, TSharedPtr<FLXRFluxAnalyzeDispatchParams> Params);
 	void BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDispatchParams> Params);
-
 };
-
-
