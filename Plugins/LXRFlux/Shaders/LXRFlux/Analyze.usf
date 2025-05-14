@@ -6,7 +6,6 @@ Texture2D<float4> InSceneCapture : register(t0); // HDR input
 
 float LuminanceThreshold;
 
-SamplerState LinearSampler : register(s0);
 
 #define INDEX_R 0
 #define INDEX_G 1

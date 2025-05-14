@@ -80,8 +80,14 @@ LXRFlux is a lightweight, high-performance lighting analysis system built entire
 - Two `SceneCaptureComponent2D` instances positioned around a proxy mesh.
 - Each capture renders to a **32×32 PF_FloatRGB RenderTarget** (GPU shared).
 - These render targets provide full HDR scene information via **FinalColorHDR**.
-- Both top and bottom captures are triggered in the same frame, followed by GPU-side analysis.
-   -  The next capture round is only queued after the previous GPU processing and readback complete, ensuring low overhead and stable pacing.
+- Captures **only one view per frame** (Top or Bottom)
+- Alternates automatically every tick
+
+| Frame | Action                            |
+|:------|:----------------------------------|
+| 1     | Capture Top, Analyze, Store result |
+| 2     | Capture Bottom, Analyze, Store result |
+| 3     | No capture, Combine Top+Bottom results |
 
 ### ⚙️ Compute Shader
 
@@ -118,31 +124,9 @@ The system uses `InterlockedMax` for all RGB and luminance values, allowing it t
 
 ---
 
-### 🎛️ Smoothing Options (Updated)
+### Usage
 
-Both `Luminance` and `Color` smoothing are applied *after* max values are decoded. While the original system averaged color, the updated implementation tracks **max color (R, G, B)** and **max luminance**, ensuring that brief flashes or bright objects aren't lost in the smoothing.
-
-So now:
-
-- **Color** is smoothed using the *brightest RGB values* captured
-- **Luminance** is based on the *maximum brightness in the scene*
-
-This makes LXRFlux especially suited for gameplay-relevant lighting like:
-
-- Lightning flashes
-- Flashlight detection
-- Short bursts of extreme lighting
-
-### 🧪 Output Interpretation
-
-- Blueprint-accessible properties:
-  ```cpp
-  UPROPERTY(BlueprintReadOnly, Category="LXRFlux|Detection")
-  float Luminance;
-
-  UPROPERTY(BlueprintReadOnly, Category="LXRFlux|Detection")
-  FLinearColor Color;
-  ```
+Check [LXR documentation](https://docs.clusterfact.games/docs/LXR/Guides/Setup/Indirect) for more details
 
 ### 🧩 Modularity
 
@@ -531,46 +515,6 @@ This approach allows:
 - 🧩 Clean isolation of version-specific changes (e.g., breaking API changes in 5.4)
 - 🔁 Cherry-picking or merging shared features across engine versions
 - 🚀 Safe staging of new features before merging into `develop` or tagging for release
-
----
-
-### ✍️ Example Workflow
-
-1. Develop new feature on a version-specific branch:
-   ```bash
-   git checkout -b feature/my-awesome-thing feature/dev54
-   ```
-
-2. Merge into the main dev branch for that UE version:
-   ```bash
-   git checkout feature/dev54
-   git merge feature/my-awesome-thing
-   ```
-
-3. (Optional) Backport to older UE version:
-   ```bash
-   git checkout feature/dev53
-   git cherry-pick <commit_hash>
-   ```
-
-4. Tag when stable:
-   ```bash
-   git tag -a v1.4.0-54 -m "Release for UE 5.4"
-   git push origin v1.4.0-54
-   ```
-
----
-
-### 📦 Release Tags
-
-We use semantic versioning with Unreal suffixes:
-
-```
-v1.4.0-54   → for Unreal Engine 5.4
-v1.3.2-53   → for Unreal Engine 5.3
-```
-
-This allows version-specific package distribution.
 
 ---
 
