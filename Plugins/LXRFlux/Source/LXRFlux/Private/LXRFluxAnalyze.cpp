@@ -49,7 +49,7 @@ namespace LXRFluxCaptureIndex
 	constexpr uint32 INDEX_G = 1;
 	constexpr uint32 INDEX_B = 2;
 	constexpr uint32 INDEX_MAX_LUM = 3;
-	constexpr uint32 INDEX_COUNT = 8;
+	constexpr uint32 INDEX_COUNT = 4;
 }
 
 namespace LXRFluxCaptureConstants
@@ -142,9 +142,14 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 		AddClearUAVPass(GraphBuilder, PassParams->OutData, 0);
 
 
-		FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("IndirectAnalyze"), ComputeShader, PassParams,
-		                             FIntVector(FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().X, 8), FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().Y, 8), 1));
+		int NumThreadsX = LXRFluxCaptureConstants::NUM_THREADS_X;
+		int NumThreadsY = LXRFluxCaptureConstants::NUM_THREADS_Y;
 
+		FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("IndirectAnalyze"), ComputeShader, PassParams,
+									 FIntVector(
+										 FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().X, NumThreadsX),
+										 FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().Y, NumThreadsY),
+										 1));
 
 		DispatchParams->DataReadbackBuffer->EnqueueCopy(GraphBuilder, OutDataBuffer, LXRFluxCaptureConstants::FLXRFluxBufferBytes);
 

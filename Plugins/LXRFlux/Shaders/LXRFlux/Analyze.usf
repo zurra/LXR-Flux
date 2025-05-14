@@ -12,8 +12,7 @@ SamplerState LinearSampler : register(s0);
 #define INDEX_G 1
 #define INDEX_B 2
 #define INDEX_MAX_LUM 3
-
-#define INDEX_COUNT 8
+#define INDEX_COUNT 4
 
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void MainReadData(uint3 DTid : SV_DispatchThreadID)
