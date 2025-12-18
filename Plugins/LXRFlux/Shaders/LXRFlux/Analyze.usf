@@ -1,11 +1,10 @@
 ﻿#include "/Engine/Private/Common.ush"
 
-RWBuffer<uint> OutData : register(u0);
+RWBuffer<uint> OutData;
 
-Texture2D<float4> InSceneCapture : register(t0); // HDR input 
+Texture2D<float4> InSceneCapture;
 
 float LuminanceThreshold;
-
 
 #define INDEX_R 0
 #define INDEX_G 1

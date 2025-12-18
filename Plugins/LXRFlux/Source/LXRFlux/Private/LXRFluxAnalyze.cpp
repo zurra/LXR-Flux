@@ -105,7 +105,7 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 	FRHICommandListImmediate& RHICmdList = GraphBuilder.RHICmdList;
 
 	SCOPE_CYCLE_COUNTER(STAT_FLXRFluxCapture_Execute);
-	DECLARE_GPU_STAT(FLXRFluxCapture)
+	DECLARE_GPU_STAT(FLXRFluxCapture);
 	RDG_EVENT_SCOPE(GraphBuilder, "FLXRFluxCapture");
 	RDG_GPU_STAT_SCOPE(GraphBuilder, FLXRFluxCapture);
 	SCOPED_DRAW_EVENT(RHICmdList, STAT_FLXRFluxCapture_Execute);
@@ -122,6 +122,8 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 			                          : DispatchParams->RenderTargetBot->GetRenderTargetTexture();
 
 
+		if (!InputRHI.IsValid()) return;
+		
 		FRDGTextureRef SceneHDR = GraphBuilder.RegisterExternalTexture(CreateRenderTarget(InputRHI, TEXT("SceneHDR")));
 		// FRDGTextureRef SceneHDR_Bot = GraphBuilder.RegisterExternalTexture(CreateRenderTarget(InputRHI_Bot, TEXT("SceneHDR_Bot")));
 
@@ -146,10 +148,11 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 		int NumThreadsY = LXRFluxCaptureConstants::NUM_THREADS_Y;
 
 		FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("IndirectAnalyze"), ComputeShader, PassParams,
-									 FIntVector(
-										 FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().X, NumThreadsX),
-										 FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().Y, NumThreadsY),
-										 1));
+		                             FIntVector(
+		                             	FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().X, NumThreadsX),
+		                             	FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().Y, NumThreadsY),
+		                             	1));
+
 
 		DispatchParams->DataReadbackBuffer->EnqueueCopy(GraphBuilder, OutDataBuffer, LXRFluxCaptureConstants::FLXRFluxBufferBytes);
 

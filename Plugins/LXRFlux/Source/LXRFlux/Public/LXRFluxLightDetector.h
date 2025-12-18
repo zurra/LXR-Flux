@@ -201,10 +201,10 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	void RequestOneShotCaptureUpdate();
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="LXRFlux|Capture")
+	UPROPERTY(EditAnywhere, Category="LXRFlux|Capture")
 	bool bCaptureIndirect = true;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category="LXRFlux|Capture")
+	UPROPERTY(EditAnywhere, Category="LXRFlux|Capture")
 	bool bCaptureDirect = true;
 
 	UPROPERTY(EditAnywhere, Category="LXRFlux|Analyze")
@@ -229,7 +229,7 @@ public:
 	float DeltaThreshold = 0.1f;
 	
 	UPROPERTY(EditAnywhere, Category="LXRFlux|SceneCapture")
-	bool bWhitelistAllStaticMeshActors = true;
+	bool bWhitelistAllStaticMeshActors = false;
 
 	UPROPERTY(EditAnywhere, Category="LXRFlux|SceneCapture")
 	FString WhiteListTag;
@@ -242,6 +242,18 @@ public:
 
 	UPROPERTY(EditAnywhere, Category="LXRFlux|SceneCapture")
 	float BotCaptureWeight = 1.0f;
+
+	UFUNCTION(BlueprintCallable, Category="LXRFlux|RenderOnlyActors")
+	void AddRenderOnlyActor(AActor* InActor);
+
+	UFUNCTION(BlueprintCallable, Category="LXRFlux|RenderOnlyActors")
+	void AddRenderOnlyActors(TArray<AActor*> InActors);
+	
+	UFUNCTION(BlueprintCallable, Category="LXRFlux|RenderOnlyActors")
+	void RemoveRenderOnlyActor(AActor* InActor);
+
+	UFUNCTION(BlueprintCallable, Category="LXRFlux|RenderOnlyActors")
+	void RemoveRenderOnlyActors(TArray<AActor*> InActors);
 
 	// How frequently to perform lighting captures (in frames).
 	// 1 = capture every frame (highest accuracy, highest cost)

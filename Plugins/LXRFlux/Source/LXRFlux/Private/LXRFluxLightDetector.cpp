@@ -360,7 +360,8 @@ void ULXRFluxLightDetectorComponent::BeginPlay()
 	FTimerHandle Temp;
 	GetWorld()->GetTimerManager().SetTimer(Temp, FTimerDelegate::CreateLambda([&]
 	{
-		RequestOneShotCaptureUpdate();
+		if (!IsBeingDestroyed())
+			RequestOneShotCaptureUpdate();
 	}), 0.1f, false);
 }
 
@@ -371,6 +372,36 @@ void ULXRFluxLightDetectorComponent::EndPlay(const EEndPlayReason::Type EndPlayR
 		CaptureAnalyzeDispatchParams->OnReadbackComplete.Reset();
 		CaptureAnalyzeDispatchParams.Reset();
 	}
+	if (TopRT)
+	{
+		TopRT->ConditionalBeginDestroy();
+		TopRT = nullptr;
+	}
+
+	if (BotRT)
+	{
+		BotRT->ConditionalBeginDestroy();
+		BotRT = nullptr;
+	}
+	
+	if (TopSceneCaptureComponent)
+	{
+		TopSceneCaptureComponent->DestroyComponent();
+		TopSceneCaptureComponent = nullptr;
+	}
+
+	if (BotSceneCaptureComponent)
+	{
+		BotSceneCaptureComponent->DestroyComponent();
+		BotSceneCaptureComponent = nullptr;
+	}
+
+	if (ChildActorComponent)
+	{
+		ChildActorComponent->DestroyComponent();
+		ChildActorComponent = nullptr;
+	}
+	
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -1022,6 +1053,41 @@ void ULXRFluxLightDetectorComponent::CreateCapturePrerequisites()
 	}
 }
 
+void ULXRFluxLightDetectorComponent::AddRenderOnlyActor(AActor* InActor)
+{
+	for (const auto& SceneCapture : SceneCaptures)
+	{
+		SceneCapture->ShowOnlyActors.AddUnique(InActor);
+	}
+}
+
+void ULXRFluxLightDetectorComponent::AddRenderOnlyActors(TArray<AActor*> InActors)
+{
+	for (const auto& SceneCapture : SceneCaptures)
+	{
+		SceneCapture->ShowOnlyActors.Append(InActors);
+	}
+}
+
+
+void ULXRFluxLightDetectorComponent::RemoveRenderOnlyActor(AActor* InActor)
+{
+	for (const auto& SceneCapture : SceneCaptures)
+
+		if (SceneCapture->ShowOnlyActors.Contains(InActor))
+		{
+			SceneCapture->ShowOnlyActors.Remove(InActor);
+		}
+}
+
+void ULXRFluxLightDetectorComponent::RemoveRenderOnlyActors(TArray<AActor*> InActors)
+{
+	for (auto Element : InActors)
+	{
+		RemoveRenderOnlyActor(Element);
+	}
+}
+
 void ULXRFluxLightDetectorComponent::UpdatePostprocessingLumenSettings()
 {
 	for (const auto& SceneCapture : SceneCaptures)
@@ -1047,9 +1113,12 @@ void ULXRFluxLightDetectorComponent::PrepareChildActor()
 	GetOwner()->GetComponents(UChildActorComponent::StaticClass(), ChildActorComponents, false);
 	for (const auto& Element : ChildActorComponents)
 	{
-		if (Cast<UChildActorComponent>(Element)->GetChildActorClass()->IsChildOf(ALXRFLuxLightDetectorChildActor::StaticClass()))
+		if (auto ChildActorClass = Cast<UChildActorComponent>(Element)->GetChildActorClass())
 		{
-			ChildActorComponent = Cast<UChildActorComponent>(Element);
+			if (ChildActorClass->IsChildOf(ALXRFLuxLightDetectorChildActor::StaticClass()))
+			{
+				ChildActorComponent = Cast<UChildActorComponent>(Element);
+			}			
 		}
 	}
 	if (!ChildActorComponent)
