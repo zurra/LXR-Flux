@@ -103,7 +103,7 @@ IMPLEMENT_GLOBAL_SHADER(FLXRFluxIndirectAnalyze, "/LXRFlux_Shaders/Analyze.usf",
 void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, const FSceneTextures& SceneTextures, TSharedPtr<FLXRFluxAnalyzeDispatchParams> DispatchParams)
 {
 	FRHICommandListImmediate& RHICmdList = GraphBuilder.RHICmdList;
-
+	
 	SCOPE_CYCLE_COUNTER(STAT_FLXRFluxCapture_Execute);
 	DECLARE_GPU_STAT(FLXRFluxCapture);
 	RDG_EVENT_SCOPE(GraphBuilder, "FLXRFluxCapture");
@@ -123,7 +123,7 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 
 
 		if (!InputRHI.IsValid()) return;
-		
+
 		FRDGTextureRef SceneHDR = GraphBuilder.RegisterExternalTexture(CreateRenderTarget(InputRHI, TEXT("SceneHDR")));
 		// FRDGTextureRef SceneHDR_Bot = GraphBuilder.RegisterExternalTexture(CreateRenderTarget(InputRHI_Bot, TEXT("SceneHDR_Bot")));
 
@@ -143,18 +143,22 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 
 		AddClearUAVPass(GraphBuilder, PassParams->OutData, 0);
 
-
 		int NumThreadsX = LXRFluxCaptureConstants::NUM_THREADS_X;
 		int NumThreadsY = LXRFluxCaptureConstants::NUM_THREADS_Y;
+		const FIntPoint Size = (CurrentStep == ELXRFluxCaptureStep::Top)
+			                       ? DispatchParams->RenderTargetTop->GetSizeXY()
+			                       : DispatchParams->RenderTargetBot->GetSizeXY();
 
 		FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("IndirectAnalyze"), ComputeShader, PassParams,
 		                             FIntVector(
-		                             	FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().X, NumThreadsX),
-		                             	FMath::DivideAndRoundUp(DispatchParams->RenderTargetTop->GetSizeXY().Y, NumThreadsY),
-		                             	1));
+			                             FMath::DivideAndRoundUp(Size.X, NumThreadsX),
+			                             FMath::DivideAndRoundUp(Size.Y, NumThreadsY),
+			                             1));
 
 
 		DispatchParams->DataReadbackBuffer->EnqueueCopy(GraphBuilder, OutDataBuffer, LXRFluxCaptureConstants::FLXRFluxBufferBytes);
+		DispatchParams->bReadbackInFlight.Store(true);
+
 
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("IndirectAnalyze_Finalize"),
@@ -164,113 +168,73 @@ void FLXRFluxCaptureInterface::DispatchRenderThread(FRDGBuilder& GraphBuilder, c
 				if (DispatchParams->Fence.IsValid())
 				{
 					RHICmdList.WriteGPUFence(DispatchParams->Fence);
-					DispatchParams->bAnalyzeDone = true;
-					DispatchParams->bAnalyzePending = false;
 				}
 			});
-
-		BeginPollingReadback(DispatchParams);
 	}
 }
 
-void FLXRFluxCaptureInterface::BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDispatchParams> DispatchParams)
+
+void FLXRFluxCaptureInterface::BeginPollingReadback_RenderThread(TSharedPtr<FLXRFluxAnalyzeDispatchParams> Params)
 {
-	DispatchParams->PollingAttempts++;
+	check(IsInRenderingThread());
+	if (!Params.IsValid()) return;
+	if (IsEngineExitRequested()) return;
+	if (!Params->bReadbackInFlight.Load()) return;
 
-	if (IsEngineExitRequested() ||
-		!IsValid(DispatchParams->IndirectDetector) ||
-		!DispatchParams->DataReadbackBuffer)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux] Skipping readback polling — Game ended or object destroyed."));
-		return;
-	}
+	if (!Params->DataReadbackBuffer) return;
 
-	if (DispatchParams->PollingAttempts > 100)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux] Readback polling exceeded max attempts, aborting."));
-		return;
-	}
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 5
-	const bool bReady = DispatchParams->Fence.IsValid() && DispatchParams->Fence->Poll();
+	const bool bReady = Params->Fence.IsValid() && Params->Fence->Poll();
 #else
-	const bool bReady = DispatchParams->DataReadbackBuffer && DispatchParams->DataReadbackBuffer->IsReady();
+	const bool bReady = Params->DataReadbackBuffer->IsReady();
 #endif
 
-	if (bReady)
+	if (!bReady)
+		return;
+
+	const uint32* DataBuffer = static_cast<const uint32*>(Params->DataReadbackBuffer->Lock(LXRFluxCaptureConstants::FLXRFluxBufferBytes));
+
+	constexpr float LuminanceScale = LXRFluxCaptureConstants::LUMINANCE_SCALE;
+
+	uint32 EncodedR = DataBuffer[LXRFluxCaptureIndex::INDEX_R];
+	uint32 EncodedG = DataBuffer[LXRFluxCaptureIndex::INDEX_G];
+	uint32 EncodedB = DataBuffer[LXRFluxCaptureIndex::INDEX_B];
+	uint32 EncodedLuminance = DataBuffer[LXRFluxCaptureIndex::INDEX_MAX_LUM];
+	uint32 Count = DataBuffer[LXRFluxCaptureIndex::INDEX_COUNT];
+
+
+	float FinalR = EncodedR / LuminanceScale;
+	float FinalG = EncodedG / LuminanceScale;
+	float FinalB = EncodedB / LuminanceScale;
+	float Luminance = EncodedLuminance / LuminanceScale;
+
+	FLinearColor FinalColor = FLinearColor(FinalR, FinalG, FinalB, 1);
+
+
+	ELXRFluxCaptureStep CurrentStep = static_cast<ELXRFluxCaptureStep>(Params->CaptureStepCounter);
+
+	if (CurrentStep == ELXRFluxCaptureStep::Top)
 	{
-		// const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(5 * sizeof(uint32)));
-		const uint32* DataBuffer = static_cast<const uint32*>(DispatchParams->DataReadbackBuffer->Lock(LXRFluxCaptureConstants::FLXRFluxBufferBytes));
-
-		constexpr float LuminanceScale = LXRFluxCaptureConstants::LUMINANCE_SCALE;
-
-		uint32 EncodedR = DataBuffer[LXRFluxCaptureIndex::INDEX_R];
-		uint32 EncodedG = DataBuffer[LXRFluxCaptureIndex::INDEX_G];
-		uint32 EncodedB = DataBuffer[LXRFluxCaptureIndex::INDEX_B];
-		uint32 EncodedLuminance = DataBuffer[LXRFluxCaptureIndex::INDEX_MAX_LUM];
-		uint32 Count = DataBuffer[LXRFluxCaptureIndex::INDEX_COUNT];
-
-
-		float FinalR = EncodedR / LuminanceScale;
-		float FinalG = EncodedG / LuminanceScale;
-		float FinalB = EncodedB / LuminanceScale;
-		float Luminance = EncodedLuminance / LuminanceScale;
-
-		FLinearColor FinalColor = FLinearColor(FinalR, FinalG, FinalB, 1);
-
-		ELXRFluxCaptureStep CurrentStep = static_cast<ELXRFluxCaptureStep>(DispatchParams->CaptureStepCounter);
-
-		if (CurrentStep == ELXRFluxCaptureStep::Top)
-		{
-			DispatchParams->Output->TopColor = FinalColor;
-			DispatchParams->Output->TopLuminance = Luminance;
-		}
-		else
-		{
-			DispatchParams->Output->BotColor = FinalColor;
-			DispatchParams->Output->BotLuminance = Luminance;
-		}
-
-
-		DispatchParams->DataReadbackBuffer->Unlock();
-		DispatchParams->DataReadbackBuffer.Reset();
-		DispatchParams->bAnalyzePending = false;
-		DispatchParams->bAnalyzeDone = false;
-		DispatchParams->PollingAttempts = 0;
-
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Raw Count: %u"), Count);
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] Max Luminance: %.4f"), Luminance);
-		UE_LOG(LogTemp, VeryVerbose, TEXT("[FLXRFlux] RGB: R=%.4f G=%.4f B=%.4f"), FinalColor.R, FinalColor.G, FinalColor.B);
-
-		if (DispatchParams->OnReadbackComplete)
-		{
-			DispatchParams->OnReadbackComplete();
-		}
+		Params->Output->TopColor = FinalColor;
+		Params->Output->TopLuminance = Luminance;
 	}
 	else
 	{
-		if (DispatchParams->PollingAttempts % 10 == 0)
-		{
-			UE_LOG(LogTemp, Verbose, TEXT("[FLXRFlux] Still polling readback... Attempts: %d"), DispatchParams->PollingAttempts);
-		}
-
-		TWeakPtr<FLXRFluxAnalyzeDispatchParams> WeakParams = DispatchParams;
-
-		FTSTicker::GetCoreTicker().AddTicker(
-			FTickerDelegate::CreateLambda([this, WeakParams](float DeltaTime)
-			{
-				AsyncTask(ENamedThreads::ActualRenderingThread, [this, WeakParams]()
-				{
-					if (TSharedPtr<FLXRFluxAnalyzeDispatchParams> Pinned = WeakParams.Pin())
-					{
-						BeginPollingReadback(Pinned);
-					}
-					else
-					{
-						UE_LOG(LogTemp, Warning, TEXT("[FLXRFlux] Polling skipped — DispatchParams no longer valid."));
-					}
-				});
-				return false;
-			}),
-			0.05f);
+		Params->Output->BotColor = FinalColor;
+		Params->Output->BotLuminance = Luminance;
 	}
+
+	Params->DataReadbackBuffer->Unlock();
+	Params->DataReadbackBuffer.Reset();
+	Params->bReadbackInFlight.Store(false);
+
+	AsyncTask(ENamedThreads::GameThread, [Params]()
+	{
+		Params->bAnalyzePending = false;
+		Params->bAnalyzeDone = true;
+
+		if (Params->OnReadbackComplete)
+			Params->OnReadbackComplete();
+	});
 }
+

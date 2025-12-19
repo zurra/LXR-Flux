@@ -47,17 +47,18 @@ struct FLXRFluxAnalyzeDispatchParams
 
 	TUniquePtr<FLXRBufferReadback> DataReadbackBuffer;
 
-	ULXRFluxLightDetectorComponent* IndirectDetector = nullptr;
+	TWeakObjectPtr<ULXRFluxLightDetectorComponent> IndirectDetectorWeak;
 
 	int32 LuminanceSum;
 	int32 LuminanceCount;
 
-	bool bAnalyzePending = false;
 	bool bAnalyzeDone = false;
 	bool bReadingInProgress = false;
 	bool bIsInitialized = false;
+	TAtomic<bool> bReadbackInFlight = false;
+	TAtomic<bool> bAnalyzePending = false;
 
-	int32 PollingAttempts;
+	float PollingStartTime;
 	uint8 CaptureStepCounter = 0;
 	uint8 FrameCounter = 0;
 	uint8 FrameCaptureMax = 1;
@@ -74,7 +75,7 @@ private:
 	FIntPoint CachedViewportSize = FIntPoint(-1, -1);
 
 public:
-	FLXRFluxAnalyzeDispatchParams(): LuminanceSum(0), LuminanceCount(0), PollingAttempts(0), LuminanceThreshold(0)
+	FLXRFluxAnalyzeDispatchParams(): LuminanceSum(0), LuminanceCount(0), LuminanceThreshold(0)
 	{
 	}
 
@@ -135,13 +136,13 @@ class LXRFLUX_API FLXRFluxCaptureInterface
 public:
 	void Dispatch(TSharedPtr<FLXRFluxAnalyzeDispatchParams> DispatchParams, FRDGBuilder& GraphBuilder, const FSceneTextures& SceneTextures)
 	{
-		// Prevent re-dispatch if a previous dispatch is still processing
 		if (DispatchParams->bReadingInProgress || !DispatchParams->bIsInitialized || DispatchParams->bAnalyzeDone)
 		{
 			return;
 		}
 
-		DispatchParams->bAnalyzePending = true; // mark as queued
+		DispatchParams->bAnalyzePending = true;
+		DispatchParams->bAnalyzeDone = false;
 
 		if (IsInRenderingThread())
 		{
@@ -152,5 +153,5 @@ public:
 
 	FLXRFluxCaptureInterface() = default;
 	void DispatchRenderThread(FRDGBuilder& GraphBuilder, const FSceneTextures& SceneTextures, TSharedPtr<FLXRFluxAnalyzeDispatchParams> Params);
-	void BeginPollingReadback(TSharedPtr<FLXRFluxAnalyzeDispatchParams> Params);
+	void BeginPollingReadback_RenderThread(TSharedPtr<FLXRFluxAnalyzeDispatchParams> Params);
 };

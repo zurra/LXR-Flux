@@ -345,12 +345,12 @@ void ULXRFluxLightDetectorComponent::BeginPlay()
 
 	CaptureAnalyzeDispatchParams->FrameCaptureMax = FMath::Max(CaptureRate, 1);
 	CaptureAnalyzeDispatchParams->Output = FluxOutput;
-	CaptureAnalyzeDispatchParams->IndirectDetector = this;
+	CaptureAnalyzeDispatchParams->IndirectDetectorWeak = this;
 	CaptureAnalyzeDispatchParams->LuminanceThreshold = bUseLuminanceThreshold ? LuminanceThreshold : 0.0f;;
-	CaptureAnalyzeDispatchParams->RenderTargetTop = CaptureAnalyzeDispatchParams->IndirectDetector->GetTopTarget()->GameThread_GetRenderTargetResource();
-	CaptureAnalyzeDispatchParams->IndirectDetector->GetTopTarget()->UpdateResourceImmediate();
-	CaptureAnalyzeDispatchParams->RenderTargetBot = CaptureAnalyzeDispatchParams->IndirectDetector->GetBotTarget()->GameThread_GetRenderTargetResource();
-	CaptureAnalyzeDispatchParams->IndirectDetector->GetBotTarget()->UpdateResourceImmediate();
+	CaptureAnalyzeDispatchParams->RenderTargetTop = CaptureAnalyzeDispatchParams->IndirectDetectorWeak->GetTopTarget()->GameThread_GetRenderTargetResource();
+	CaptureAnalyzeDispatchParams->IndirectDetectorWeak->GetTopTarget()->UpdateResourceImmediate();
+	CaptureAnalyzeDispatchParams->RenderTargetBot = CaptureAnalyzeDispatchParams->IndirectDetectorWeak->GetBotTarget()->GameThread_GetRenderTargetResource();
+	CaptureAnalyzeDispatchParams->IndirectDetectorWeak->GetBotTarget()->UpdateResourceImmediate();
 	CaptureAnalyzeDispatchParams->OnReadbackComplete = [this]() { this->OnReadbackComplete(); };
 
 	CaptureAnalyzeDispatchParams->bIsInitialized = true;

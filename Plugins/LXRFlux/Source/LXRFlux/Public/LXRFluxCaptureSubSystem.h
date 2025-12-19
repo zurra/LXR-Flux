@@ -46,7 +46,7 @@ public:
 	virtual void Deinitialize() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LXRFlux|Capture|PostProcess")
-	UMaterialInterface* IndirectPostProcessMaterial;
+	TObjectPtr<UMaterialInterface> IndirectPostProcessMaterial;
 
 	void DoCaptures();
 
@@ -56,10 +56,19 @@ public:
 
 	bool bStopRender = false;
 	TQueue<TSharedPtr<FLXRFluxAnalyzeDispatchParams>, EQueueMode::Spsc> PendingAnalyzeQueue;
+	TArray<TWeakPtr<FLXRFluxAnalyzeDispatchParams>> InFlight;
 
 	void RequestIndirectAnalyze(TSharedPtr<FLXRFluxAnalyzeDispatchParams> Params);
 
 	static FString GetLXRAssetPath();
 
 	void StartABTestIndividualGISettings(UWorld* World);
+	void StartPollingTickerIfNeeded();
+
+	bool bPollTickerActive = false;
+	FTSTicker::FDelegateHandle PollHandle;
+
+	TAtomic<bool> bShuttingDown{false};
+
 };
+

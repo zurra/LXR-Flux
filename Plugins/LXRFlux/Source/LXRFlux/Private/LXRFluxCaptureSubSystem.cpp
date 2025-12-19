@@ -67,6 +67,18 @@ void ULXRFluxSubSystem::Deinitialize()
 {
 	bStopRender = true;
 	PendingAnalyzeQueue.Empty();
+
+	if (PollHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(PollHandle);
+		PollHandle.Reset();
+	}
+
+	bPollTickerActive = false;
+	InFlight.Empty();
+	
+	bShuttingDown.Store(true);
+
 	Super::Deinitialize();
 }
 
@@ -91,7 +103,7 @@ void ULXRFluxSubSystem::DoCaptures()
 				              if (bStopRender) return;
 				              while (PendingAnalyzeQueue.Dequeue(Params))
 				              {
-					              if (!Params.IsValid() || !Params->IndirectDetector) continue;
+					              if (!Params.IsValid() || !Params->IndirectDetectorWeak.IsValid()) continue;
 
 					              if (Params->RenderTargetTop && Params->RenderTargetBot)
 					              {
@@ -106,9 +118,79 @@ void ULXRFluxSubSystem::RequestIndirectAnalyze(TSharedPtr<FLXRFluxAnalyzeDispatc
 {
 	if (Params.IsValid() && !Params->bAnalyzePending)
 	{
+		Params->bAnalyzeDone = false;
 		Params->bAnalyzePending = true;
 		PendingAnalyzeQueue.Enqueue(Params);
+		InFlight.Add(Params);
 	}
+	StartPollingTickerIfNeeded();
+}
+
+void ULXRFluxSubSystem::StartPollingTickerIfNeeded()
+{
+	check(IsInGameThread());
+	if (bPollTickerActive || bShuttingDown.Load()) return;
+
+	if (bPollTickerActive) return;
+	bPollTickerActive = true;
+
+	TWeakObjectPtr<ULXRFluxSubSystem> WeakThis(this);
+
+	PollHandle = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda([WeakThis](float)
+		{
+			if (!WeakThis.IsValid()) return false;
+			ULXRFluxSubSystem* This = WeakThis.Get();
+
+			if (IsEngineExitRequested())
+			{
+				This->bPollTickerActive = false;
+				return false;
+			}
+
+
+			This->InFlight.RemoveAllSwap([](const TWeakPtr<FLXRFluxAnalyzeDispatchParams>& Params)
+			{
+				if (!Params.IsValid()) return false;
+				TSharedPtr<FLXRFluxAnalyzeDispatchParams> AsShared = Params.Pin();
+				return !AsShared.IsValid() || !AsShared->bAnalyzePending;
+			});
+
+			if (This->InFlight.Num() == 0)
+			{
+				This->bPollTickerActive = false;
+				return false;
+			}
+
+
+			for (auto& InFlightParams : This->InFlight)
+			{
+				if (IsEngineExitRequested())
+				{
+					This->bPollTickerActive = false;
+					return false;
+				}
+				if (auto AsShared = InFlightParams.Pin())
+				{
+					if (AsShared->bReadbackInFlight.Load())
+					{
+						TWeakPtr<FLXRFluxAnalyzeDispatchParams> WeakParams = AsShared;
+						AsyncTask(ENamedThreads::ActualRenderingThread, [WeakParams, WeakThis]()
+						{
+							if (!WeakThis.IsValid()) return;
+							if (auto Pinned = WeakParams.Pin())
+							{
+								WeakThis->CaptureInterface->BeginPollingReadback_RenderThread(Pinned);
+							}
+						});
+					}
+				}
+			}
+
+			return true;
+		}),
+		0.0f
+	);
 }
 
 void ULXRFluxSubSystem::StartABTestIndividualGISettings(UWorld* World)
