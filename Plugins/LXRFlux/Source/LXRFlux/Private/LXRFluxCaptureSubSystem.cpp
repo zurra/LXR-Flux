@@ -31,11 +31,23 @@ SOFTWARE.
 
 ULXRFluxSubSystem::ULXRFluxSubSystem(const FObjectInitializer& ObjectInitializer)
 {
-	ConstructorHelpers::FObjectFinder<UMaterialInterface> IndirectPostProcessFinder(TEXT("/LXR/Materials/PP_LXR_HDR_FULLRANGE.PP_LXR_HDR_FULLRANGE"));
+	ConstructorHelpers::FObjectFinder<UMaterialInterface> IndirectPostProcessFinder(TEXT("/LXRFlux/Materials/PP_LXR_HDR_FULLRANGE.PP_LXR_HDR_FULLRANGE"));
 	if (IndirectPostProcessFinder.Succeeded())
 	{
 		IndirectPostProcessMaterial = IndirectPostProcessFinder.Object;
 	}
+	
+		ConstructorHelpers::FObjectFinder<UStaticMesh> IndirectMeshFinder(TEXT("/LXRFlux/Assets/LXRIndirectMeshV2.LXRIndirectMeshV2"));
+    	if (IndirectMeshFinder.Succeeded())
+    	{
+    		IndirectMesh = IndirectMeshFinder.Object;
+    	}
+    
+    	ConstructorHelpers::FObjectFinder<UMaterialInterface> IndirectMeshMaterialFinder(TEXT("/LXRFlux/Assets/LXRIndirectMeshMat.LXRIndirectMeshMat"));
+    	if (IndirectMeshMaterialFinder.Succeeded())
+    	{
+    		IndirectMeshMaterial = IndirectMeshMaterialFinder.Object;
+    	}
 
 	CaptureInterface = MakeUnique<FLXRFluxCaptureInterface>();
 

@@ -865,12 +865,8 @@ void ULXRFluxLightDetectorComponent::CreateCapturePrerequisites()
 	// }
 
 	ULXRFluxSubSystem* SubSystem = GetWorld()->GetGameInstance()->GetSubsystem<ULXRFluxSubSystem>();
-	FString AssetPath = SubSystem->GetLXRAssetPath();
-	FString MeshPath = AssetPath + "/Assets/LXRIndirectMeshV2.LXRIndirectMeshV2";
-	FString MaterialPath = AssetPath + "/Assets/LXRIndirectMeshMat.LXRIndirectMeshMat";
-	UStaticMesh* IndirectMesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), NULL, *MeshPath));
-	UMaterial* IndirectMeshMat = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr, *MaterialPath));
-
+	UStaticMesh* IndirectMesh = SubSystem->IndirectMesh;
+	UMaterialInterface* IndirectMeshMat = SubSystem->IndirectMeshMaterial;
 
 	IndirectMeshComponent = Cast<UStaticMeshComponent>(ChildActorComponent->GetChildActor()->GetComponentByClass(UStaticMeshComponent::StaticClass()));
 	IndirectMatInst = UKismetMaterialLibrary::CreateDynamicMaterialInstance(GetWorld(), IndirectMeshMat, "IndirectMatInst");

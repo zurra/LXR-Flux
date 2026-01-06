@@ -47,6 +47,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LXRFlux|Capture|PostProcess")
 	TObjectPtr<UMaterialInterface> IndirectPostProcessMaterial;
+	
+		UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LXRFlux|Capture|Mesh")
+    	TObjectPtr<UStaticMesh> IndirectMesh;
+    
+    	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LXRFlux|Capture|Mesh")
+    	TObjectPtr<UMaterialInterface> IndirectMeshMaterial;
 
 	void DoCaptures();
 
