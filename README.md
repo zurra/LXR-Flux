@@ -1,5 +1,5 @@
 ```
-[UE 5.3 ✅] [UE 5.4 ✅] [UE 5.5 ✅]
+[UE 5.3 ✅] [UE 5.4 ✅] [UE 5.5 ✅] [UE 5.6 ✅] [UE 5.7 ✅]
 ```
 
 > ⚠️ **Unreal Engine Compatibility**
@@ -160,12 +160,6 @@ Falls back to **manual staging buffer logic**:
 
 ---
 
-### 💡 Why this matters
-
-GPU readback is notoriously tricky in Unreal due to the multithreaded rendering model and asynchronous nature of RDG.  
-`LXRFlux` handles this **efficiently and safely**, regardless of engine version.
-
----
 
 
 ## 📦 Installation
