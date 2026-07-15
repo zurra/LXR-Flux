@@ -1,3 +1,6 @@
+LXR Flux is now archived as it is included in the [**LXR-CE**](https://github.com/zurra/LXR), the new LXR fully open sourced.
+
+
 ```
 [UE 5.3 ✅] [UE 5.4 ✅] [UE 5.5 ✅] [UE 5.6 ✅] [UE 5.7 ✅]
 ```
